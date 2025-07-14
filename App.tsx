@@ -10,12 +10,13 @@ import LoginForm from './src/components/LoginForm';
 import ChildrenSelection from './src/components/ChildrenSelection';
 import DownloadOptions from './src/components/DownloadOptions';
 import DownloadProgress from './src/components/DownloadProgress';
+import LoginTest from './src/components/LoginTest';
 import KidsNoteAPI from './src/services/KidsNoteAPI';
 
-type AppState = 'login' | 'children' | 'options' | 'downloading';
+type AppState = 'login' | 'children' | 'options' | 'downloading' | 'test';
 
 function App(): React.JSX.Element {
-  const [currentState, setCurrentState] = useState<AppState>('login');
+  const [currentState, setCurrentState] = useState<AppState>('test'); // 테스트 모드로 시작
   const [selectedChildren, setSelectedChildren] = useState<string[]>([]);
   const [downloadConfig, setDownloadConfig] = useState<any>(null);
 
@@ -70,6 +71,8 @@ function App(): React.JSX.Element {
 
   const renderCurrentScreen = () => {
     switch (currentState) {
+      case 'test':
+        return <LoginTest />;
       case 'login':
         return <LoginForm onLoginSuccess={handleLoginSuccess} />;
       case 'children':
@@ -90,7 +93,7 @@ function App(): React.JSX.Element {
           />
         );
       default:
-        return <LoginForm onLoginSuccess={handleLoginSuccess} />;
+        return <LoginTest />;
     }
   };
 

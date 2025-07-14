@@ -1,5 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
+import axios from 'axios';
+import CookieManager from '@react-native-cookies/cookies';
 
 const BASE_URL = 'https://www.kidsnote.com';
 const API_BASE = '/api/v1_2';
@@ -7,53 +9,51 @@ const API_BASE = '/api/v1_2';
 class KidsNoteAPI {
   constructor() {
     this.sessionID = null;
+    this.axiosInstance = axios.create({
+      baseURL: BASE_URL,
+      timeout: 30000,
+      withCredentials: true,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
   }
 
   async makeRequest(endpoint, options = {}) {
     const url = `${BASE_URL}${endpoint}`;
-    const defaultHeaders = {
-      'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36',
-      'Content-Type': 'application/x-www-form-urlencoded',
-    };
-
-    if (this.sessionID) {
-      defaultHeaders.Cookie = `sessionid=${this.sessionID}`;
-    }
-
-    const requestOptions = {
-      method: 'GET',
-      headers: { ...defaultHeaders, ...options.headers },
-      timeout: 30000, // 30초 타임아웃
-      ...options,
-    };
-
+    
     try {
       console.log('Making request to:', url);
-      const response = await fetch(url, requestOptions);
-      console.log('Response status:', response.status);
       
-      const text = await response.text();
-      
-      if (response.status === 401) {
-        throw new Error('세션 만료! 다시 로그인해주세요.');
-      } else if (response.status === 403) {
-        throw new Error('접근 권한이 없습니다. 로그인을 확인해주세요.');
-      } else if (response.status >= 400) {
-        console.log('Error response text:', text.substring(0, 200));
-        throw new Error(`HTTP ${response.status}: 서버 오류가 발생했습니다.`);
+      const config = {
+        method: options.method || 'GET',
+        url: endpoint,
+        headers: {
+          ...options.headers,
+        },
+        ...options,
+      };
+
+      if (this.sessionID) {
+        config.headers.Cookie = `sessionid=${this.sessionID}`;
       }
 
-      try {
-        const jsonData = JSON.parse(text);
-        console.log('JSON response received');
-        return { response, data: jsonData };
-      } catch {
-        console.log('Text response received');
-        return { response, data: text };
-      }
+      const response = await this.axiosInstance(config);
+      console.log('Response status:', response.status);
+      
+      return { response, data: response.data };
     } catch (error) {
       console.error('Request error:', error);
-      if (error.message.includes('Network request failed') || error.message.includes('fetch')) {
+      if (error.response?.status === 401) {
+        throw new Error('세션 만료! 다시 로그인해주세요.');
+      } else if (error.response?.status === 403) {
+        throw new Error('접근 권한이 없습니다. 로그인을 확인해주세요.');
+      } else if (error.response?.status >= 400) {
+        throw new Error(`HTTP ${error.response.status}: 서버 오류가 발생했습니다.`);
+      }
+      
+      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
         throw new Error('네트워크 연결을 확인해주세요.');
       }
       throw error;
@@ -64,137 +64,131 @@ class KidsNoteAPI {
     console.log('🔐 로그인 시작:', username);
     
     try {
+      // 쿠키 초기화
+      await CookieManager.clearAll();
+      
       // 1단계: 로그인 페이지에서 CSRF 토큰 가져오기
-      console.log('📋 1단계: 로그인 페이지 요청 중...');
-      const loginPageResponse = await fetch(`${BASE_URL}/kr/login/`, {
-        method: 'GET',
+      console.log('📋 1단계: 로그인 페이지에서 CSRF 토큰 가져오기...');
+      
+      const loginPageResponse = await this.axiosInstance.get('/kr/login/', {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
         },
       });
       
       console.log('📋 로그인 페이지 응답 상태:', loginPageResponse.status);
+      console.log('📋 로그인 페이지 HTML 길이:', loginPageResponse.data.length);
       
-      const loginPageText = await loginPageResponse.text();
-      console.log('📋 로그인 페이지 HTML 길이:', loginPageText.length);
-      console.log('📋 로그인 페이지 HTML 일부:', loginPageText.substring(0, 300));
-      
-      const csrfMatch = loginPageText.match(/name='csrfmiddlewaretoken' value='([^']*)'/) || 
-                       loginPageText.match(/csrfmiddlewaretoken.*?value="([^"]*)"/) ||
-                       loginPageText.match(/csrfToken.*?["']([^"']*)/);
+      // CSRF 토큰 추출 (다양한 패턴 시도)
+      const csrfPatterns = [
+        /name='csrfmiddlewaretoken' value='([^']*)'/,
+        /name="csrfmiddlewaretoken" value="([^"]*)"/,
+        /csrfmiddlewaretoken.*?value="([^"]*)"/,
+        /csrfmiddlewaretoken.*?value='([^']*)'/,
+        /<input[^>]*name=["']csrfmiddlewaretoken["'][^>]*value=["']([^"']*)/,
+        /<meta[^>]*name=["']csrf-token["'][^>]*content=["']([^"']*)/i,
+        /csrf[_-]?token['"]\s*:\s*['"]([^'"]*)/i,
+        /window\._token\s*=\s*['"]([^'"]*)/i,
+      ];
       
       let csrfToken = '';
-      if (csrfMatch) {
-        csrfToken = csrfMatch[1];
-        console.log('✅ CSRF 토큰 찾음:', csrfToken.substring(0, 10) + '...');
-      } else {
-        console.log('❌ CSRF 토큰을 찾을 수 없음');
+      for (const pattern of csrfPatterns) {
+        const match = loginPageResponse.data.match(pattern);
+        if (match) {
+          csrfToken = match[1];
+          console.log('✅ CSRF 토큰 찾음:', csrfToken.substring(0, 10) + '...');
+          break;
+        }
       }
-
-      // 로그인 페이지에서 받은 쿠키 추출
-      const setCookieHeaders = loginPageResponse.headers.get('set-cookie') || '';
-      console.log('🍪 초기 쿠키:', setCookieHeaders);
       
-      let cookieString = '';
-      if (setCookieHeaders) {
-        const cookies = setCookieHeaders.split(',').map(cookie => cookie.split(';')[0]).join('; ');
-        cookieString = cookies;
-        console.log('🍪 처리된 쿠키:', cookieString);
+      if (!csrfToken) {
+        console.log('❌ CSRF 토큰을 찾을 수 없음');
+        console.log('📄 로그인 페이지 미리보기:', loginPageResponse.data.substring(0, 2000));
       }
 
       // 2단계: 실제 로그인 요청
-      console.log('🔑 2단계: 로그인 요청 중...');
-      const body = new URLSearchParams({
-        username: username,
-        password: password,
-        csrfmiddlewaretoken: csrfToken,
-      }).toString();
+      console.log('🔑 2단계: 로그인 요청...');
+      
+      const bodyParams = new URLSearchParams();
+      bodyParams.append('username', username);
+      bodyParams.append('password', password);
+      if (csrfToken) {
+        bodyParams.append('csrfmiddlewaretoken', csrfToken);
+      }
       
       console.log('📝 로그인 데이터:', { username, hasPassword: !!password, hasCsrf: !!csrfToken });
 
-      const loginResponse = await fetch(`${BASE_URL}/kr/login/`, {
-        method: 'POST',
+      const loginResponse = await this.axiosInstance.post('/kr/login/', bodyParams, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G975F) AppleWebKit/537.36',
           'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'ko-KR,ko;q=0.9,en;q=0.8',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1',
           'Referer': `${BASE_URL}/kr/login/`,
-          'Cookie': cookieString,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
         },
-        body: body,
-        redirect: 'manual', // 리다이렉트를 수동으로 처리
+        maxRedirects: 0, // 리다이렉트 수동 처리
+        validateStatus: function (status) {
+          return status >= 200 && status < 400; // 3xx도 성공으로 처리
+        },
       });
 
       console.log('🔑 로그인 응답 상태:', loginResponse.status);
-      console.log('🔑 로그인 응답 헤더 (전체):', JSON.stringify([...loginResponse.headers.entries()]));
+      console.log('🔑 로그인 응답 헤더:', loginResponse.headers);
 
-      // 로그인 성공 시 세션 쿠키 추출
-      const responseSetCookie = loginResponse.headers.get('set-cookie');
-      console.log('🍪 로그인 응답 쿠키:', responseSetCookie);
-
-      if (responseSetCookie) {
-        const sessionMatch = responseSetCookie.match(/sessionid=([^;]*)/);
-        console.log('🔍 세션 매치 결과:', sessionMatch);
-        
-        if (sessionMatch) {
-          this.sessionID = sessionMatch[1];
-          await AsyncStorage.setItem('kidsnote_session', this.sessionID);
-          console.log('✅ 로그인 성공! 세션 ID:', this.sessionID);
-          return { success: true, sessionID: this.sessionID };
-        }
+      // CookieManager에서 쿠키 확인
+      const cookies = await CookieManager.get(BASE_URL);
+      console.log('🍪 CookieManager에서 가져온 쿠키:', cookies);
+      
+      if (cookies.sessionid) {
+        this.sessionID = cookies.sessionid.value;
+        await AsyncStorage.setItem('kidsnote_session', this.sessionID);
+        console.log('✅ 로그인 성공! 세션 ID:', this.sessionID);
+        return { success: true, sessionID: this.sessionID };
       }
 
-      // 로그인 성공인지 확인 (리다이렉트 상태 코드 확인)
+      // 응답 본문 확인 (디버깅용)
+      console.log('📄 로그인 응답 본문 길이:', loginResponse.data.length);
+      console.log('📄 로그인 응답 미리보기:', loginResponse.data.substring(0, 1000));
+      
+      // 로그인 실패 원인 분석
+      if (loginResponse.data.includes('잘못된') || loginResponse.data.includes('invalid') || loginResponse.data.includes('incorrect')) {
+        console.log('🚫 로그인 실패: 잘못된 자격 증명');
+        return { success: false, error: '아이디 또는 비밀번호가 잘못되었습니다.' };
+      }
+      
+      if (loginResponse.data.includes('csrf') || loginResponse.data.includes('CSRF')) {
+        console.log('🚫 로그인 실패: CSRF 토큰 문제');
+        return { success: false, error: 'CSRF 토큰 오류입니다. 다시 시도해주세요.' };
+      }
+      
+      if (loginResponse.data.includes('<form') && loginResponse.data.includes('login')) {
+        console.log('🚫 로그인 실패: 로그인 폼이 다시 표시됨');
+        return { success: false, error: '로그인에 실패했습니다. 자격 증명을 확인해주세요.' };
+      }
+
+      // 리다이렉트 확인
       if (loginResponse.status === 302 || loginResponse.status === 301) {
-        const location = loginResponse.headers.get('location');
-        console.log('🔄 리다이렉트 위치:', location);
-        
-        // 대시보드나 메인 페이지로 리다이렉트되면 성공
-        if (location && (location.includes('/dashboard') || location.includes('/kr/') || location === '/' || location.includes('/index'))) {
-          // 모든 쿠키에서 세션 찾기
-          const allCookies = responseSetCookie || cookieString;
-          console.log('🍪 모든 쿠키에서 세션 찾기:', allCookies);
-          
-          const sessionMatch = allCookies.match(/sessionid=([^;]*)/);
-          if (sessionMatch) {
-            this.sessionID = sessionMatch[1];
-            await AsyncStorage.setItem('kidsnote_session', this.sessionID);
-            console.log('✅ 리다이렉트로 로그인 성공! 세션 ID:', this.sessionID);
-            return { success: true, sessionID: this.sessionID };
-          }
-          
-          // 임시 세션으로 처리해보기
-          console.log('⚠️ 세션 ID를 찾을 수 없지만 리다이렉트는 성공. 임시 세션 생성...');
-          this.sessionID = 'temp_session_' + Date.now();
+        console.log('🔄 리다이렉트 감지됨 - 로그인 성공 가능성');
+        // 쿠키 다시 확인
+        const redirectCookies = await CookieManager.get(BASE_URL);
+        if (redirectCookies.sessionid) {
+          this.sessionID = redirectCookies.sessionid.value;
           await AsyncStorage.setItem('kidsnote_session', this.sessionID);
+          console.log('✅ 리다이렉트 후 로그인 성공! 세션 ID:', this.sessionID);
           return { success: true, sessionID: this.sessionID };
         }
       }
 
-      // 응답 본문 확인
-      const responseText = await loginResponse.text();
-      console.log('📄 로그인 응답 본문 길이:', responseText.length);
-      console.log('📄 로그인 응답 미리보기:', responseText.substring(0, 500));
-
-      // 로그인 실패 메시지 확인
-      if (responseText.includes('Invalid username') || responseText.includes('Invalid password') || 
-          responseText.includes('로그인') && responseText.includes('실패')) {
-        console.log('❌ 로그인 실패: 잘못된 자격증명');
-        throw new Error('로그인 실패: 아이디 또는 비밀번호가 올바르지 않습니다.');
-      }
-
-      // 더 자세한 디버그 정보
-      console.log('🐛 디버그 정보:');
-      console.log('- 응답 상태:', loginResponse.status);
-      console.log('- 응답 헤더 수:', [...loginResponse.headers.entries()].length);
-      console.log('- 응답 본문에 sessionid 포함:', responseText.includes('sessionid'));
-      console.log('- 응답 본문에 login 포함:', responseText.includes('login'));
-      console.log('- 응답 본문에 error 포함:', responseText.includes('error'));
-
-      console.log('❌ 최종 실패: 세션 정보를 찾을 수 없음');
-      throw new Error('로그인 실패: 세션 정보를 찾을 수 없습니다. 키즈노트 사이트 구조가 변경되었을 수 있습니다.');
+      console.log('❌ 로그인 실패: 세션 쿠키를 찾을 수 없음');
+      return { success: false, error: '로그인 실패: 아이디 또는 비밀번호가 올바르지 않습니다.' };
     } catch (error) {
       console.error('💥 로그인 에러:', error);
-      console.error('💥 에러 스택:', error.stack);
       return { success: false, error: error.message };
     }
   }
@@ -213,6 +207,7 @@ class KidsNoteAPI {
     try {
       this.sessionID = null;
       await AsyncStorage.removeItem('kidsnote_session');
+      await CookieManager.clearAll();
     } catch (error) {
       console.error('Logout error:', error);
     }
@@ -273,7 +268,7 @@ class KidsNoteAPI {
         fromUrl: url,
         toFile: downloadDest,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 10; SM-G975F)',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
         progress: (res) => {
           if (onProgress) {
