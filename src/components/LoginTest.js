@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput } from 'react-native';
 import KidsNoteAPI from '../services/KidsNoteAPI';
 
 const LoginTest = () => {
   const [testResults, setTestResults] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [username, setUsername] = useState('sw90lee');
+  const [password, setPassword] = useState('dhksauddA1!');
 
   const addLog = (message) => {
     setTestResults(prev => prev + message + '\n');
@@ -16,10 +18,7 @@ const LoginTest = () => {
     setTestResults('');
     
     addLog('=== 키즈노트 로그인 테스트 시작 ===');
-    
-    // 테스트 계정 정보
-    const username = 'sw90lee';
-    const password = 'dhksauddA1!';
+    addLog(`사용자: ${username}`);
     
     try {
       const result = await KidsNoteAPI.login(username, password);
@@ -58,6 +57,30 @@ const LoginTest = () => {
     <View style={styles.container}>
       <Text style={styles.title}>키즈노트 API 테스트</Text>
       
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>아이디:</Text>
+        <TextInput
+          style={styles.input}
+          value={username}
+          onChangeText={setUsername}
+          placeholder="아이디를 입력하세요"
+          autoCapitalize="none"
+          editable={!isLoading}
+        />
+      </View>
+      
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>비밀번호:</Text>
+        <TextInput
+          style={styles.input}
+          value={password}
+          onChangeText={setPassword}
+          placeholder="비밀번호를 입력하세요"
+          secureTextEntry
+          editable={!isLoading}
+        />
+      </View>
+      
       <TouchableOpacity 
         style={[styles.button, isLoading && styles.buttonDisabled]}
         onPress={testLogin}
@@ -87,6 +110,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 20,
     color: '#333',
+  },
+  inputContainer: {
+    marginBottom: 15,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 5,
+    color: '#333',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    backgroundColor: '#fff',
   },
   button: {
     backgroundColor: '#007AFF',

@@ -16,7 +16,7 @@ import KidsNoteAPI from './src/services/KidsNoteAPI';
 type AppState = 'login' | 'children' | 'options' | 'downloading' | 'test';
 
 function App(): React.JSX.Element {
-  const [currentState, setCurrentState] = useState<AppState>('test'); // 테스트 모드로 시작
+  const [currentState, setCurrentState] = useState<AppState>('login'); // 정상 로그인 화면으로 시작
   const [selectedChildren, setSelectedChildren] = useState<string[]>([]);
   const [downloadConfig, setDownloadConfig] = useState<any>(null);
 
@@ -93,7 +93,7 @@ function App(): React.JSX.Element {
           />
         );
       default:
-        return <LoginTest />;
+        return <LoginForm onLoginSuccess={handleLoginSuccess} />;
     }
   };
 
