@@ -51,18 +51,17 @@ class KidsNoteAPI {
       
       const headers = {
         'Accept': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-        'Referer': BASE_URL,
+        'User-Agent': 'Mozilla/5.0',
         ...options.headers,
       };
 
-      // sessionid 쿠키 설정 (우선순위: CookieManager > this.sessionID)
+      // sessionid 쿠키 설정 (origin.js와 동일한 형태)
       if (cookies.sessionid) {
-        headers.Cookie = `sessionid=${cookies.sessionid.value}`;
+        headers.Cookie = `sessionid=${cookies.sessionid.value};`;
         this.sessionID = cookies.sessionid.value; // 동기화
         console.log('🍪 CookieManager 세션 사용');
       } else if (this.sessionID) {
-        headers.Cookie = `sessionid=${this.sessionID}`;
+        headers.Cookie = `sessionid=${this.sessionID};`;
         console.log('🍪 저장된 세션 사용');
       } else {
         console.log('❌ 세션 없음!');
@@ -307,10 +306,11 @@ class KidsNoteAPI {
     try {
       const endpoint = `${API_BASE}/children/${childId}/reports/?page_size=${pageSize}&page=${page}&tz=Asia%2FSeoul&child=${childId}`;
       console.log(`📋 getReports 요청: ${endpoint}`);
+      console.log(`📋 최종 URL: ${BASE_URL}${endpoint}`);
       const { data } = await this.makeRequest(endpoint);
       console.log(`📋 getReports 응답:`, JSON.stringify(data, null, 2));
       
-      // 이미지/비디오 URL 구조 확인
+      // 이미지/비디오 URL 구조 상세 확인
       if (data.results && data.results.length > 0) {
         const firstReport = data.results[0];
         console.log(`📋 첫 번째 리포트 샘플:`, JSON.stringify(firstReport, null, 2));
@@ -318,10 +318,22 @@ class KidsNoteAPI {
         if (firstReport.attached_images && firstReport.attached_images.length > 0) {
           const firstImage = firstReport.attached_images[0];
           console.log(`🖼️ 첫 번째 이미지 정보:`, JSON.stringify(firstImage, null, 2));
+          console.log(`🔗 이미지 original URL: ${firstImage.original}`);
+          console.log(`🔗 이미지 original_file_name: ${firstImage.original_file_name}`);
+          
+          // URL이 상대경로인지 절대경로인지 확인
+          if (firstImage.original) {
+            console.log(`🔍 URL 분석:`);
+            console.log(`  - 시작 문자: ${firstImage.original.substring(0, 20)}...`);
+            console.log(`  - http로 시작: ${firstImage.original.startsWith('http')}`);
+            console.log(`  - /로 시작: ${firstImage.original.startsWith('/')}`);
+          }
         }
         
         if (firstReport.attached_video) {
           console.log(`🎥 비디오 정보:`, JSON.stringify(firstReport.attached_video, null, 2));
+          console.log(`🔗 비디오 high URL: ${firstReport.attached_video.high}`);
+          console.log(`🔗 비디오 original URL: ${firstReport.attached_video.original}`);
         }
       }
       
@@ -336,10 +348,11 @@ class KidsNoteAPI {
     try {
       const endpoint = `${API_BASE}/children/${childId}/albums/?page_size=${pageSize}&page=${page}&tz=Asia%2FSeoul&child=${childId}`;
       console.log(`📸 getAlbums 요청: ${endpoint}`);
+      console.log(`📸 최종 URL: ${BASE_URL}${endpoint}`);
       const { data } = await this.makeRequest(endpoint);
       console.log(`📸 getAlbums 응답:`, JSON.stringify(data, null, 2));
       
-      // 이미지/비디오 URL 구조 확인
+      // 이미지/비디오 URL 구조 상세 확인
       if (data.results && data.results.length > 0) {
         const firstAlbum = data.results[0];
         console.log(`📸 첫 번째 앨범 샘플:`, JSON.stringify(firstAlbum, null, 2));
@@ -347,10 +360,22 @@ class KidsNoteAPI {
         if (firstAlbum.attached_images && firstAlbum.attached_images.length > 0) {
           const firstImage = firstAlbum.attached_images[0];
           console.log(`🖼️ 첫 번째 이미지 정보:`, JSON.stringify(firstImage, null, 2));
+          console.log(`🔗 이미지 original URL: ${firstImage.original}`);
+          console.log(`🔗 이미지 original_file_name: ${firstImage.original_file_name}`);
+          
+          // URL이 상대경로인지 절대경로인지 확인
+          if (firstImage.original) {
+            console.log(`🔍 URL 분석:`);
+            console.log(`  - 시작 문자: ${firstImage.original.substring(0, 20)}...`);
+            console.log(`  - http로 시작: ${firstImage.original.startsWith('http')}`);
+            console.log(`  - /로 시작: ${firstImage.original.startsWith('/')}`);
+          }
         }
         
         if (firstAlbum.attached_video) {
           console.log(`🎥 비디오 정보:`, JSON.stringify(firstAlbum.attached_video, null, 2));
+          console.log(`🔗 비디오 high URL: ${firstAlbum.attached_video.high}`);
+          console.log(`🔗 비디오 original URL: ${firstAlbum.attached_video.original}`);
         }
       }
       
@@ -375,15 +400,28 @@ class KidsNoteAPI {
         await this.loadSession();
       }
 
-      // origin.js에서는 쿠키 없이 직접 다운로드 (URL에 인증 정보 포함)
+      // 헤더 설정
       const headers = {
         'User-Agent': 'Mozilla/5.0',
       };
+      
+      // 세션 쿠키 추가 (필요한 경우를 위해)
+      if (this.sessionID) {
+        headers['Cookie'] = `sessionid=${this.sessionID}`;
+        console.log(`🍪 쿠키 헤더 추가: sessionid=${this.sessionID.substring(0, 10)}...`);
+      }
 
-      // URL 그대로 사용 (origin.js와 동일)
+      // URL 처리 로직
       let downloadUrl = url;
       console.log(`🔗 원본 URL: ${url}`);
-      console.log(`🔗 다운로드 URL: ${downloadUrl}`);
+      
+      // 상대경로인 경우 절대경로로 변환
+      if (url && !url.startsWith('http')) {
+        downloadUrl = url.startsWith('/') ? `${BASE_URL}${url}` : `${BASE_URL}/${url}`;
+        console.log(`🔄 상대경로를 절대경로로 변환: ${downloadUrl}`);
+      }
+      
+      console.log(`🔗 최종 다운로드 URL: ${downloadUrl}`);
 
       console.log(`📥 다운로드 시작: ${downloadUrl}`);
       console.log(`🍪 세션 ID: ${this.sessionID ? this.sessionID.substring(0, 10) + '...' : '없음'}`);
