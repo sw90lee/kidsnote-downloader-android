@@ -269,7 +269,7 @@ class DownloadManager {
     try {
       this.isDownloading = true;
       
-      const downloadPath = await this.createDownloadDirectory();
+      await this.createDownloadDirectory();
       
       this.log(`다운로드 시작 - 자녀 ID: ${childId}`);
       if (startDate || endDate) {
