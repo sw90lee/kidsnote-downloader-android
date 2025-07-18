@@ -73,12 +73,30 @@ function App(): React.JSX.Element {
       const checkLoginSuccess = () => {
         console.log('Checking login success...');
         console.log('Current pathname:', window.location.pathname);
+        console.log('Current URL:', window.location.href);
         
-        // If we're not on login page anymore, assume login success
-        if (!window.location.pathname.includes('/login') && 
-            !window.location.pathname.includes('/signup') &&
-            window.location.pathname !== '/kr/' &&
-            window.location.pathname !== '/') {
+        // More comprehensive login detection
+        const isLoggedIn = 
+          // URL based detection
+          (window.location.pathname.includes('/home') ||
+           window.location.pathname.includes('/children') ||
+           window.location.pathname.includes('/family') ||
+           window.location.pathname.includes('/dashboard') ||
+           window.location.href.includes('/home') ||
+           window.location.href.includes('/children')) ||
+          // Element based detection
+          (document.querySelector('[data-testid*="home"]') ||
+           document.querySelector('[class*="dashboard"]') ||
+           document.querySelector('[class*="family"]') ||
+           document.querySelector('[href*="/children"]') ||
+           document.querySelector('[href*="/home"]') ||
+           document.querySelector('a[href*="/logout"]') ||
+           document.querySelector('button[data-testid*="logout"]')) ||
+          // Cookie based detection
+          (document.cookie.includes('sessionid=') && 
+           !window.location.pathname.includes('/login'));
+        
+        if (isLoggedIn) {
           console.log('Login success detected!');
           window.ReactNativeWebView.postMessage('LOGIN_SUCCESS');
           return true;
@@ -87,9 +105,11 @@ function App(): React.JSX.Element {
       };
 
       // Check immediately
-      if (checkLoginSuccess()) {
-        return;
-      }
+      setTimeout(() => {
+        if (checkLoginSuccess()) {
+          return;
+        }
+      }, 1000);
 
       // Monitor for navigation changes
       let lastUrl = location.href;
@@ -98,9 +118,11 @@ function App(): React.JSX.Element {
         if (url !== lastUrl) {
           lastUrl = url;
           console.log('URL changed to:', url);
-          if (checkLoginSuccess()) {
-            observer.disconnect();
-          }
+          setTimeout(() => {
+            if (checkLoginSuccess()) {
+              observer.disconnect();
+            }
+          }, 1000);
         }
       });
       observer.observe(document, { subtree: true, childList: true });
@@ -111,6 +133,29 @@ function App(): React.JSX.Element {
           clearInterval(interval);
           observer.disconnect();
         }
+      }, 3000);
+
+      // Add manual test button for debugging
+      setTimeout(() => {
+        const testBtn = document.createElement('button');
+        testBtn.textContent = 'Test Login Detection';
+        testBtn.style.cssText = \`
+          position: fixed;
+          top: 50px;
+          right: 10px;
+          background: red;
+          color: white;
+          border: none;
+          padding: 10px;
+          border-radius: 5px;
+          z-index: 10002;
+          cursor: pointer;
+        \`;
+        testBtn.onclick = () => {
+          console.log('Manual test triggered');
+          checkLoginSuccess();
+        };
+        document.body.appendChild(testBtn);
       }, 2000);
 
     })();
@@ -197,6 +242,19 @@ function App(): React.JSX.Element {
                 <Text style={styles.toolbarButtonText}>🏠</Text>
               </TouchableOpacity>
               
+              <TouchableOpacity 
+                style={[styles.toolbarButton, {backgroundColor: '#28a745'}]} 
+                onPress={async () => {
+                  console.log('Manual cookie extraction triggered');
+                  const success = await checkLoginAndExtractCookie();
+                  if (!success) {
+                    alert('로그인 상태를 확인할 수 없습니다. 로그인 후 다시 시도해주세요.');
+                  }
+                }}
+              >
+                <Text style={styles.toolbarButtonText}>✓</Text>
+              </TouchableOpacity>
+              
               <Text style={styles.urlText} numberOfLines={1}>
                 {currentUrl}
               </Text>
@@ -217,8 +275,20 @@ function App(): React.JSX.Element {
               startInLoadingState={true}
               scalesPageToFit={true}
               allowsInlineMediaPlayback={true}
-              mediaPlaybackRequiresUserAction={false}
+              mediaPlaybackRequiresUserAction={true}
               mixedContentMode="compatibility"
+              allowsFullscreenVideo={true}
+              allowsBackForwardNavigationGestures={true}
+              cacheEnabled={true}
+              originWhitelist={['*']}
+              onError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.warn('WebView error: ', nativeEvent);
+              }}
+              onHttpError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.warn('WebView HTTP error: ', nativeEvent);
+              }}
               userAgent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             />
           </View>
@@ -258,8 +328,20 @@ function App(): React.JSX.Element {
               startInLoadingState={true}
               scalesPageToFit={true}
               allowsInlineMediaPlayback={true}
-              mediaPlaybackRequiresUserAction={false}
+              mediaPlaybackRequiresUserAction={true}
               mixedContentMode="compatibility"
+              allowsFullscreenVideo={true}
+              allowsBackForwardNavigationGestures={true}
+              cacheEnabled={true}
+              originWhitelist={['*']}
+              onError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.warn('WebView error: ', nativeEvent);
+              }}
+              onHttpError={(syntheticEvent) => {
+                const { nativeEvent } = syntheticEvent;
+                console.warn('WebView HTTP error: ', nativeEvent);
+              }}
               userAgent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
             />
           </View>
