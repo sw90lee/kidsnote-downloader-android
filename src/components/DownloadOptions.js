@@ -8,6 +8,9 @@ import {
   ScrollView,
   Switch,
   Modal,
+  PermissionsAndroid,
+  Platform,
+  Linking,
 } from 'react-native';
 import DatePicker from 'react-native-date-picker';
 import StorageSettings from './StorageSettings';
@@ -34,7 +37,111 @@ const DownloadOptions = ({ selectedChildren, onStartDownload }) => {
     { id: '2', label: '앨범' },
   ];
 
-  const handleStartDownload = () => {
+  const checkStoragePermissions = async () => {
+    if (Platform.OS !== 'android') {
+      return true;
+    }
+
+    try {
+      // Android 13+ (API 33+)
+      if (Platform.Version >= 33) {
+        const mediaPermissions = [
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO,
+        ];
+
+        const granted = await PermissionsAndroid.requestMultiple(mediaPermissions);
+        
+        const allGranted = Object.values(granted).every(
+          result => result === PermissionsAndroid.RESULTS.GRANTED
+        );
+        
+        if (!allGranted) {
+          Alert.alert(
+            '파일 및 미디어 권한 필요',
+            '파일 다운로드를 위해 "파일 및 미디어" 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
+            [
+              { text: '취소', style: 'cancel' },
+              { 
+                text: '설정으로 이동', 
+                onPress: async () => {
+                  try {
+                    await Linking.openSettings();
+                  } catch (error) {
+                    console.error('Failed to open settings:', error);
+                  }
+                }
+              }
+            ]
+          );
+          return false;
+        }
+      }
+      
+      // Android 11+ (API 30+)
+      if (Platform.Version >= 30) {
+        Alert.alert(
+          '저장소 권한 필요',
+          '파일 다운로드를 위해 "모든 파일에 액세스" 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
+          [
+            { text: '취소', style: 'cancel' },
+            { 
+              text: '설정으로 이동', 
+              onPress: async () => {
+                try {
+                  await Linking.openSettings();
+                } catch (error) {
+                  console.error('Failed to open settings:', error);
+                }
+              }
+            }
+          ]
+        );
+        return false;
+      } else {
+        // Android 10 이하
+        const permissions = [
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+        ];
+
+        const granted = await PermissionsAndroid.requestMultiple(permissions);
+        
+        const allGranted = Object.values(granted).every(
+          result => result === PermissionsAndroid.RESULTS.GRANTED
+        );
+        
+        if (!allGranted) {
+          Alert.alert(
+            '저장소 권한 필요',
+            '파일 다운로드를 위해 저장소 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
+            [
+              { text: '취소', style: 'cancel' },
+              { 
+                text: '설정으로 이동', 
+                onPress: async () => {
+                  try {
+                    await Linking.openSettings();
+                  } catch (error) {
+                    console.error('Failed to open settings:', error);
+                  }
+                }
+              }
+            ]
+          );
+          return false;
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Permission check error:', error);
+      return false;
+    }
+  };
+
+  const handleStartDownload = async () => {
     const downloadConfig = {
       selectedChildren,
       contentType,
@@ -48,6 +155,12 @@ const DownloadOptions = ({ selectedChildren, onStartDownload }) => {
     // 날짜 유효성 검사
     if (!useAllData && startDate > endDate) {
       Alert.alert('오류', '시작 날짜가 종료 날짜보다 늦습니다.');
+      return;
+    }
+
+    // 저장소 권한 확인
+    const hasPermission = await checkStoragePermissions();
+    if (!hasPermission) {
       return;
     }
 
