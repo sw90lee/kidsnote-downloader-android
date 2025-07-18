@@ -9,6 +9,8 @@ const API_BASE = '/api/v1_2';
 class KidsNoteAPI {
   constructor() {
     this.sessionID = null;
+    
+    // 로그인 전용 axios 인스턴스 (기존)
     this.axiosInstance = axios.create({
       baseURL: BASE_URL,
       timeout: 30000,
@@ -16,6 +18,17 @@ class KidsNoteAPI {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Content-Type': 'application/x-www-form-urlencoded',
+      },
+    });
+    
+    // API 호출 전용 axios 인스턴스 (새로 생성)
+    this.apiInstance = axios.create({
+      baseURL: BASE_URL,
+      timeout: 30000,
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Referer': BASE_URL,
       },
     });
   }
@@ -26,49 +39,62 @@ class KidsNoteAPI {
     try {
       console.log('🌐 API 요청:', url);
       
+      // 세션 로드
+      if (!this.sessionID) {
+        await this.loadSession();
+      }
+      
       // CookieManager에서 쿠키 가져오기
       const cookies = await CookieManager.get(BASE_URL);
-      console.log('🍪 요청에 사용할 쿠키:', cookies);
+      console.log('🍪 CookieManager 쿠키:', cookies);
       console.log('🍪 현재 sessionID:', this.sessionID ? this.sessionID.substring(0, 10) + '...' : '없음');
       
-      const config = {
-        method: options.method || 'GET',
-        url: endpoint,
-        headers: {
-          ...options.headers,
-        },
-        ...options,
+      const headers = {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Referer': BASE_URL,
+        ...options.headers,
       };
 
       // sessionid 쿠키 설정 (우선순위: CookieManager > this.sessionID)
       if (cookies.sessionid) {
-        config.headers.Cookie = `sessionid=${cookies.sessionid.value}`;
+        headers.Cookie = `sessionid=${cookies.sessionid.value}`;
         this.sessionID = cookies.sessionid.value; // 동기화
+        console.log('🍪 CookieManager 세션 사용');
       } else if (this.sessionID) {
-        config.headers.Cookie = `sessionid=${this.sessionID}`;
+        headers.Cookie = `sessionid=${this.sessionID}`;
+        console.log('🍪 저장된 세션 사용');
+      } else {
+        console.log('❌ 세션 없음!');
+        throw new Error('세션이 필요합니다. 다시 로그인해주세요.');
       }
 
-      console.log('🚀 요청 설정:', JSON.stringify(config, null, 2));
+      console.log('🚀 요청 헤더:', JSON.stringify(headers, null, 2));
       
-      const response = await this.axiosInstance(config);
+      const response = await fetch(url, {
+        method: options.method || 'GET',
+        headers,
+        ...options,
+      });
+
       console.log('📊 응답 상태:', response.status, response.statusText);
-      console.log('📦 응답 데이터 타입:', typeof response.data);
-      console.log('📦 응답 데이터 크기:', JSON.stringify(response.data).length, 'bytes');
       
-      return { response, data: response.data };
+      if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('세션 만료! 다시 로그인해주세요.');
+        } else if (response.status === 403) {
+          throw new Error('접근 권한이 없습니다. 로그인을 확인해주세요.');
+        } else {
+          throw new Error(`HTTP ${response.status}: 서버 오류가 발생했습니다.`);
+        }
+      }
+      
+      const data = await response.json();
+      console.log('📦 응답 데이터 크기:', JSON.stringify(data).length, 'bytes');
+      
+      return { response, data };
     } catch (error) {
       console.error('Request error:', error);
-      if (error.response?.status === 401) {
-        throw new Error('세션 만료! 다시 로그인해주세요.');
-      } else if (error.response?.status === 403) {
-        throw new Error('접근 권한이 없습니다. 로그인을 확인해주세요.');
-      } else if (error.response?.status >= 400) {
-        throw new Error(`HTTP ${error.response.status}: 서버 오류가 발생했습니다.`);
-      }
-      
-      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        throw new Error('네트워크 연결을 확인해주세요.');
-      }
       throw error;
     }
   }
