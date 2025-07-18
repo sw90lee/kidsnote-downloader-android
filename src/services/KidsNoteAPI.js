@@ -24,11 +24,12 @@ class KidsNoteAPI {
     const url = `${BASE_URL}${endpoint}`;
     
     try {
-      console.log('Making request to:', url);
+      console.log('🌐 API 요청:', url);
       
       // CookieManager에서 쿠키 가져오기
       const cookies = await CookieManager.get(BASE_URL);
       console.log('🍪 요청에 사용할 쿠키:', cookies);
+      console.log('🍪 현재 sessionID:', this.sessionID ? this.sessionID.substring(0, 10) + '...' : '없음');
       
       const config = {
         method: options.method || 'GET',
@@ -47,8 +48,12 @@ class KidsNoteAPI {
         config.headers.Cookie = `sessionid=${this.sessionID}`;
       }
 
+      console.log('🚀 요청 설정:', JSON.stringify(config, null, 2));
+      
       const response = await this.axiosInstance(config);
-      console.log('Response status:', response.status);
+      console.log('📊 응답 상태:', response.status, response.statusText);
+      console.log('📦 응답 데이터 타입:', typeof response.data);
+      console.log('📦 응답 데이터 크기:', JSON.stringify(response.data).length, 'bytes');
       
       return { response, data: response.data };
     } catch (error) {
@@ -275,7 +280,25 @@ class KidsNoteAPI {
   async getReports(childId, pageSize = 20, page = 1) {
     try {
       const endpoint = `${API_BASE}/children/${childId}/reports/?page_size=${pageSize}&page=${page}&tz=Asia%2FSeoul&child=${childId}`;
+      console.log(`📋 getReports 요청: ${endpoint}`);
       const { data } = await this.makeRequest(endpoint);
+      console.log(`📋 getReports 응답:`, JSON.stringify(data, null, 2));
+      
+      // 이미지/비디오 URL 구조 확인
+      if (data.results && data.results.length > 0) {
+        const firstReport = data.results[0];
+        console.log(`📋 첫 번째 리포트 샘플:`, JSON.stringify(firstReport, null, 2));
+        
+        if (firstReport.attached_images && firstReport.attached_images.length > 0) {
+          const firstImage = firstReport.attached_images[0];
+          console.log(`🖼️ 첫 번째 이미지 정보:`, JSON.stringify(firstImage, null, 2));
+        }
+        
+        if (firstReport.attached_video) {
+          console.log(`🎥 비디오 정보:`, JSON.stringify(firstReport.attached_video, null, 2));
+        }
+      }
+      
       return { success: true, data };
     } catch (error) {
       console.error('Get reports error:', error);
@@ -286,7 +309,25 @@ class KidsNoteAPI {
   async getAlbums(childId, pageSize = 20, page = 1) {
     try {
       const endpoint = `${API_BASE}/children/${childId}/albums/?page_size=${pageSize}&page=${page}&tz=Asia%2FSeoul&child=${childId}`;
+      console.log(`📸 getAlbums 요청: ${endpoint}`);
       const { data } = await this.makeRequest(endpoint);
+      console.log(`📸 getAlbums 응답:`, JSON.stringify(data, null, 2));
+      
+      // 이미지/비디오 URL 구조 확인
+      if (data.results && data.results.length > 0) {
+        const firstAlbum = data.results[0];
+        console.log(`📸 첫 번째 앨범 샘플:`, JSON.stringify(firstAlbum, null, 2));
+        
+        if (firstAlbum.attached_images && firstAlbum.attached_images.length > 0) {
+          const firstImage = firstAlbum.attached_images[0];
+          console.log(`🖼️ 첫 번째 이미지 정보:`, JSON.stringify(firstImage, null, 2));
+        }
+        
+        if (firstAlbum.attached_video) {
+          console.log(`🎥 비디오 정보:`, JSON.stringify(firstAlbum.attached_video, null, 2));
+        }
+      }
+      
       return { success: true, data };
     } catch (error) {
       console.error('Get albums error:', error);
@@ -317,11 +358,19 @@ class KidsNoteAPI {
         headers['Cookie'] = `sessionid=${this.sessionID}`;
       }
 
-      console.log(`📥 다운로드 시작: ${url}`);
+      // URL이 상대경로인지 확인하고 절대경로로 변환
+      let downloadUrl = url;
+      if (url && !url.startsWith('http')) {
+        downloadUrl = `${BASE_URL}${url.startsWith('/') ? url : '/' + url}`;
+        console.log(`🔗 상대경로 감지, 절대경로로 변환: ${downloadUrl}`);
+      }
+
+      console.log(`📥 다운로드 시작: ${downloadUrl}`);
       console.log(`🍪 세션 ID: ${this.sessionID ? this.sessionID.substring(0, 10) + '...' : '없음'}`);
+      console.log(`📂 저장 경로: ${downloadDest}`);
 
       const downloadResult = await RNFS.downloadFile({
-        fromUrl: url,
+        fromUrl: downloadUrl,
         toFile: downloadDest,
         headers,
         progress: (res) => {
