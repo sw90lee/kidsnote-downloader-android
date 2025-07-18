@@ -91,7 +91,8 @@ function App(): React.JSX.Element {
           if (Platform.Version >= 33) {
             const mediaPermissions = [
               PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
-              PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO
+              PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
+              PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO
             ];
 
             const mediaGranted = await PermissionsAndroid.requestMultiple(mediaPermissions);

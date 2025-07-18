@@ -7,6 +7,9 @@ import {
   Alert,
   ActivityIndicator,
   ScrollView,
+  PermissionsAndroid,
+  Platform,
+  Linking,
 } from 'react-native';
 import KidsNoteAPI from '../services/KidsNoteAPI';
 
@@ -45,12 +48,121 @@ const ChildrenSelection = ({ onChildrenSelected }) => {
     });
   };
 
-  const handleNext = () => {
+  const checkStoragePermissions = async () => {
+    if (Platform.OS !== 'android') {
+      return true;
+    }
+
+    try {
+      // Android 13+ (API 33+)
+      if (Platform.Version >= 33) {
+        const mediaPermissions = [
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO,
+        ];
+
+        const granted = await PermissionsAndroid.requestMultiple(mediaPermissions);
+        
+        const allGranted = Object.values(granted).every(
+          result => result === PermissionsAndroid.RESULTS.GRANTED
+        );
+        
+        if (!allGranted) {
+          Alert.alert(
+            '파일 및 미디어 권한 필요',
+            '파일 다운로드를 위해 "파일 및 미디어" 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
+            [
+              { text: '취소', style: 'cancel' },
+              { 
+                text: '설정으로 이동', 
+                onPress: async () => {
+                  try {
+                    await Linking.openSettings();
+                  } catch (error) {
+                    console.error('Failed to open settings:', error);
+                  }
+                }
+              }
+            ]
+          );
+          return false;
+        }
+      }
+      
+      // Android 11+ (API 30+)
+      if (Platform.Version >= 30) {
+        Alert.alert(
+          '저장소 권한 필요',
+          '파일 다운로드를 위해 "모든 파일에 액세스" 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
+          [
+            { text: '취소', style: 'cancel' },
+            { 
+              text: '설정으로 이동', 
+              onPress: async () => {
+                try {
+                  await Linking.openSettings();
+                } catch (error) {
+                  console.error('Failed to open settings:', error);
+                }
+              }
+            }
+          ]
+        );
+        return false;
+      } else {
+        // Android 10 이하
+        const permissions = [
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+        ];
+
+        const granted = await PermissionsAndroid.requestMultiple(permissions);
+        
+        const allGranted = Object.values(granted).every(
+          result => result === PermissionsAndroid.RESULTS.GRANTED
+        );
+        
+        if (!allGranted) {
+          Alert.alert(
+            '저장소 권한 필요',
+            '파일 다운로드를 위해 저장소 권한이 필요합니다.',
+            [
+              { text: '취소', style: 'cancel' },
+              { 
+                text: '설정으로 이동', 
+                onPress: async () => {
+                  try {
+                    await Linking.openSettings();
+                  } catch (error) {
+                    console.error('Failed to open settings:', error);
+                  }
+                }
+              }
+            ]
+          );
+          return false;
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Permission check error:', error);
+      return false;
+    }
+  };
+
+  const handleNext = async () => {
     if (selectedChildren.length === 0) {
       Alert.alert('알림', '다운로드할 자녀를 선택해주세요.');
       return;
     }
-    onChildrenSelected(selectedChildren);
+
+    // 저장소 권한 확인
+    const hasPermission = await checkStoragePermissions();
+    if (hasPermission) {
+      onChildrenSelected(selectedChildren);
+    }
   };
 
   if (isLoading) {

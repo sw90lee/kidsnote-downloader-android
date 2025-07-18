@@ -66,7 +66,7 @@ const FolderBrowser: React.FC<FolderBrowserProps> = ({
       if (Platform.Version >= 30) {
         Alert.alert(
           '저장소 권한 필요',
-          '폴더 브라우저를 사용하려면 "사진 및 동영상" 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
+          '폴더 브라우저를 사용하려면 "모든 파일에 액세스" 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
           [
             { text: '취소', style: 'cancel', onPress: () => onClose() },
             { 
