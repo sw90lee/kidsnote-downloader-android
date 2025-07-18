@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
-import DocumentPicker from '@react-native-documents/picker';
 import FolderBrowser from './FolderBrowser';
 
 interface StorageSettingsProps {
@@ -60,24 +59,6 @@ const StorageSettings: React.FC<StorageSettingsProps> = ({ onClose, onSave }) =>
     setAvailablePaths(paths);
   };
 
-  const selectFolder = async () => {
-    try {
-      const result = await DocumentPicker.pick({
-        type: DocumentPicker.types.directories,
-      });
-
-      if (result && result.length > 0) {
-        const selectedPath = `${result[0].uri}/KidsNote`;
-        setCustomPath(selectedPath);
-        Alert.alert('폴더 선택됨', `선택된 경로: ${selectedPath}`);
-      }
-    } catch (error) {
-      if (!DocumentPicker.isCancel(error)) {
-        console.error('Folder selection error:', error);
-        Alert.alert('오류', '폴더 선택 중 오류가 발생했습니다.');
-      }
-    }
-  };
 
   const openFolderBrowser = () => {
     setShowFolderBrowser(true);
@@ -187,15 +168,9 @@ const StorageSettings: React.FC<StorageSettingsProps> = ({ onClose, onSave }) =>
           multiline
         />
         
-        <View style={styles.buttonGroup}>
-          <TouchableOpacity style={styles.browseButton} onPress={selectFolder}>
-            <Text style={styles.browseButtonText}>📁 시스템 선택</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.explorerButton} onPress={openFolderBrowser}>
-            <Text style={styles.explorerButtonText}>🗂️ 탐색기</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity style={styles.explorerButton} onPress={openFolderBrowser}>
+          <Text style={styles.explorerButtonText}>🗂️ 폴더 선택</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.buttonContainer}>
@@ -316,24 +291,7 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     fontFamily: 'monospace',
   },
-  buttonGroup: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  browseButton: {
-    flex: 1,
-    backgroundColor: '#28a745',
-    padding: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  browseButtonText: {
-    color: 'white',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
   explorerButton: {
-    flex: 1,
     backgroundColor: '#007bff',
     padding: 12,
     borderRadius: 6,
