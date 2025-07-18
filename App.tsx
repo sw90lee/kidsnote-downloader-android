@@ -10,19 +10,18 @@ import LoginForm from './src/components/LoginForm';
 import ChildrenSelection from './src/components/ChildrenSelection';
 import DownloadOptions from './src/components/DownloadOptions';
 import DownloadProgress from './src/components/DownloadProgress';
-import LoginTest from './src/components/LoginTest';
 import KidsNoteAPI from './src/services/KidsNoteAPI';
 
-type AppState = 'login' | 'children' | 'options' | 'downloading' | 'test';
+type AppState = 'login' | 'children' | 'options' | 'downloading';
 
 function App(): React.JSX.Element {
   const [currentState, setCurrentState] = useState<AppState>('login'); // 정상 로그인 화면으로 시작
   const [selectedChildren, setSelectedChildren] = useState<string[]>([]);
   const [downloadConfig, setDownloadConfig] = useState<any>(null);
 
-  useEffect(() => {
-    checkExistingSession();
-  }, []);
+  // useEffect(() => {
+  //   checkExistingSession();
+  // }, []);
 
   const checkExistingSession = async () => {
     try {
@@ -71,8 +70,6 @@ function App(): React.JSX.Element {
 
   const renderCurrentScreen = () => {
     switch (currentState) {
-      case 'test':
-        return <LoginTest />;
       case 'login':
         return <LoginForm onLoginSuccess={handleLoginSuccess} />;
       case 'children':
@@ -109,6 +106,39 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  toolbar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  toolbarButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 8,
+    backgroundColor: '#007bff',
+    borderRadius: 4,
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
+  },
+  toolbarButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  urlText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 8,
+  },
+  webview: {
+    flex: 1,
   },
 });
 

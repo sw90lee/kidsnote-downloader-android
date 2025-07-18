@@ -19,7 +19,8 @@
     "react-native-date-picker": "^5.0.13",
     "react-native-fs": "^2.20.0",
     "react-native-permissions": "^5.4.1",
-    "react-native-vector-icons": "^10.2.0"
+    "react-native-vector-icons": "^10.2.0",
+    "react-native-webview": "^13.15.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
