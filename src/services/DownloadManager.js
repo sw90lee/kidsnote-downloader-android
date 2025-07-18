@@ -123,6 +123,7 @@ class DownloadManager {
           : `${formattedDate}-${childName}-${image.id}${extension}`;
         
         this.log(`이미지 다운로드 중: ${fileName}`);
+        this.log(`🔗 이미지 URL: ${image.original}`);
         
         const result = await KidsNoteAPI.downloadFile(
           image.original,
@@ -164,9 +165,11 @@ class DownloadManager {
         : `${formattedDate}-${childName}-${video.id}${extension}`;
       
       this.log(`동영상 다운로드 중: ${fileName}`);
+      const videoUrl = video.high || video.original;
+      this.log(`🔗 동영상 URL: ${videoUrl}`);
       
       const result = await KidsNoteAPI.downloadFile(
-        video.high || video.original,
+        videoUrl,
         `KidsNote/${fileName}`,
         (progress) => {
           if (this.onProgress) {

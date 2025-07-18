@@ -303,12 +303,27 @@ class KidsNoteAPI {
       
       await RNFS.mkdir(dirPath);
 
+      // 세션 확인
+      if (!this.sessionID) {
+        await this.loadSession();
+      }
+
+      const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      };
+
+      // 세션이 있으면 쿠키 헤더 추가
+      if (this.sessionID) {
+        headers['Cookie'] = `sessionid=${this.sessionID}`;
+      }
+
+      console.log(`📥 다운로드 시작: ${url}`);
+      console.log(`🍪 세션 ID: ${this.sessionID ? this.sessionID.substring(0, 10) + '...' : '없음'}`);
+
       const downloadResult = await RNFS.downloadFile({
         fromUrl: url,
         toFile: downloadDest,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        },
+        headers,
         progress: (res) => {
           if (onProgress) {
             const progress = (res.bytesWritten / res.contentLength) * 100;
@@ -318,9 +333,11 @@ class KidsNoteAPI {
       }).promise;
 
       if (downloadResult.statusCode === 200) {
+        console.log(`✅ 다운로드 성공: ${destinationPath}`);
         return { success: true, path: downloadDest };
       } else {
-        throw new Error(`다운로드 실패: HTTP ${downloadResult.statusCode}`);
+        console.error(`❌ 다운로드 실패: HTTP ${downloadResult.statusCode} - ${url}`);
+        throw new Error(`HTTP ${downloadResult.statusCode}: 서버 오류가 발생했습니다.`);
       }
     } catch (error) {
       console.error('Download file error:', error);
