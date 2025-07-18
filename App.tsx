@@ -4,16 +4,14 @@ import {
   StatusBar,
   StyleSheet,
   View,
-  Text,
-  TouchableOpacity,
   PermissionsAndroid,
   Platform,
   Alert,
+  Linking,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import CookieManager from '@react-native-cookies/cookies';
 
-import LoginForm from './src/components/LoginForm';
 import ChildrenSelection from './src/components/ChildrenSelection';
 import DownloadOptions from './src/components/DownloadOptions';
 import DownloadProgress from './src/components/DownloadProgress';
@@ -23,12 +21,9 @@ type AppState = 'webview-login' | 'children' | 'options' | 'downloading';
 
 function App(): React.JSX.Element {
   const webViewRef = useRef<WebView>(null);
-  const [canGoBack, setCanGoBack] = useState(false);
-  const [currentUrl, setCurrentUrl] = useState('https://www.kidsnote.com/kr/login');
   const [currentState, setCurrentState] = useState<AppState>('webview-login');
   const [selectedChildren, setSelectedChildren] = useState<string[]>([]);
   const [downloadConfig, setDownloadConfig] = useState<any>(null);
-  const [sessionCookie, setSessionCookie] = useState<string | null>(null);
 
   useEffect(() => {
     // Request permissions and clear cookies
@@ -36,34 +31,73 @@ function App(): React.JSX.Element {
       // Request storage permissions
       if (Platform.OS === 'android') {
         try {
-          const permissions = [
-            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-            PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-          ];
+          // Check if we need to request All Files Access for Android 11+
+          if (Platform.Version >= 30) {
+            // For Android 11+, we need All Files Access permission
+            Alert.alert(
+              '저장소 권한 필요',
+              '파일 다운로드를 위해 "모든 파일에 액세스" 권한이 필요합니다. 설정 페이지로 이동하시겠습니까?',
+              [
+                { text: '취소', style: 'cancel' },
+                { 
+                  text: '설정으로 이동', 
+                  onPress: async () => {
+                    try {
+                      await Linking.openSettings();
+                    } catch (error) {
+                      console.error('Failed to open settings:', error);
+                    }
+                  }
+                }
+              ]
+            );
+          } else {
+            // For Android 10 and below, use regular permissions
+            const permissions = [
+              PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+              PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+            ];
 
-          // For Android 13+, request media permissions
+            const granted = await PermissionsAndroid.requestMultiple(permissions);
+            
+            console.log('Permission results:', granted);
+            
+            const allGranted = Object.values(granted).every(
+              result => result === PermissionsAndroid.RESULTS.GRANTED
+            );
+            
+            if (!allGranted) {
+              Alert.alert(
+                '권한 필요',
+                '파일 다운로드를 위해 저장소 권한이 필요합니다.',
+                [
+                  { text: '취소', style: 'cancel' },
+                  { 
+                    text: '설정으로 이동', 
+                    onPress: async () => {
+                      try {
+                        await Linking.openSettings();
+                      } catch (error) {
+                        console.error('Failed to open settings:', error);
+                      }
+                    }
+                  }
+                ]
+              );
+            }
+          }
+
+          // For Android 13+, also request media permissions
           if (Platform.Version >= 33) {
-            permissions.push(
+            const mediaPermissions = [
               PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
               PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO
-            );
+            ];
+
+            const mediaGranted = await PermissionsAndroid.requestMultiple(mediaPermissions);
+            console.log('Media permission results:', mediaGranted);
           }
 
-          const granted = await PermissionsAndroid.requestMultiple(permissions);
-          
-          console.log('Permission results:', granted);
-          
-          const allGranted = Object.values(granted).every(
-            result => result === PermissionsAndroid.RESULTS.GRANTED
-          );
-          
-          if (!allGranted) {
-            Alert.alert(
-              '권한 필요',
-              '파일 다운로드를 위해 저장소 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
-              [{ text: '확인' }]
-            );
-          }
         } catch (error) {
           console.error('Permission request error:', error);
         }
@@ -93,7 +127,6 @@ function App(): React.JSX.Element {
         
         // Save session to KidsNoteAPI
         await KidsNoteAPI.saveSession(sessionId);
-        setSessionCookie(sessionId);
         
         // Switch to native downloader UI
         setCurrentState('children');
@@ -209,37 +242,12 @@ function App(): React.JSX.Element {
         }, 3000);
       });
 
-      // Add manual test button for debugging
-      setTimeout(() => {
-        const testBtn = document.createElement('button');
-        testBtn.textContent = 'Test Login Detection';
-        testBtn.style.cssText = \`
-          position: fixed;
-          top: 50px;
-          right: 10px;
-          background: red;
-          color: white;
-          border: none;
-          padding: 10px;
-          border-radius: 5px;
-          z-index: 10002;
-          cursor: pointer;
-        \`;
-        testBtn.onclick = () => {
-          console.log('Manual test triggered');
-          checkLoginSuccess();
-        };
-        document.body.appendChild(testBtn);
-      }, 2000);
 
     })();
     true;
   `;
 
   const handleNavigationStateChange = async (navState: any) => {
-    setCanGoBack(navState.canGoBack);
-    setCurrentUrl(navState.url);
-    
     // URL 변경 시마다 로그인 상태 확인
     console.log('Navigation state changed:', navState.url);
     
@@ -273,26 +281,8 @@ function App(): React.JSX.Element {
     }
   };
 
-  const onShouldStartLoadWithRequest = (request: any) => {
+  const onShouldStartLoadWithRequest = () => {
     return true;
-  };
-
-  const goBack = () => {
-    if (webViewRef.current && canGoBack) {
-      webViewRef.current.goBack();
-    }
-  };
-
-  const reload = () => {
-    if (webViewRef.current) {
-      webViewRef.current.reload();
-    }
-  };
-
-  const goHome = () => {
-    if (webViewRef.current) {
-      webViewRef.current.loadRequest({ uri: 'https://www.kidsnote.com/kr/login' });
-    }
   };
 
   const handleChildrenSelected = (children: string[]) => {
@@ -318,45 +308,10 @@ function App(): React.JSX.Element {
       case 'webview-login':
         return (
           <View style={styles.container}>
-            <View style={styles.toolbar}>
-              <TouchableOpacity 
-                style={[styles.toolbarButton, !canGoBack && styles.disabledButton]} 
-                onPress={goBack}
-                disabled={!canGoBack}
-              >
-                <Text style={styles.toolbarButtonText}>←</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.toolbarButton} onPress={reload}>
-                <Text style={styles.toolbarButtonText}>⟳</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity style={styles.toolbarButton} onPress={goHome}>
-                <Text style={styles.toolbarButtonText}>🏠</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity 
-                style={[styles.toolbarButton, {backgroundColor: '#28a745'}]} 
-                onPress={async () => {
-                  console.log('Manual cookie extraction triggered');
-                  const success = await checkLoginAndExtractCookie();
-                  if (!success) {
-                    alert('로그인 상태를 확인할 수 없습니다. 로그인 후 다시 시도해주세요.');
-                  }
-                }}
-              >
-                <Text style={styles.toolbarButtonText}>✓</Text>
-              </TouchableOpacity>
-              
-              <Text style={styles.urlText} numberOfLines={1}>
-                {currentUrl}
-              </Text>
-            </View>
-
             <WebView
               ref={webViewRef}
               source={{ uri: 'https://www.kidsnote.com/kr/login' }}
-              style={styles.webview}
+              style={styles.fullWebView}
               onNavigationStateChange={handleNavigationStateChange}
               onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
               onMessage={handleWebViewMessage}
@@ -409,7 +364,7 @@ function App(): React.JSX.Element {
             <WebView
               ref={webViewRef}
               source={{ uri: 'https://www.kidsnote.com/kr/login' }}
-              style={styles.webview}
+              style={styles.fullWebView}
               onNavigationStateChange={handleNavigationStateChange}
               onShouldStartLoadWithRequest={onShouldStartLoadWithRequest}
               onMessage={handleWebViewMessage}
@@ -455,37 +410,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5f5f5',
   },
-  toolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  toolbarButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginRight: 8,
-    backgroundColor: '#007bff',
-    borderRadius: 4,
-  },
-  disabledButton: {
-    backgroundColor: '#ccc',
-  },
-  toolbarButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  urlText: {
-    flex: 1,
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 8,
-  },
-  webview: {
+  fullWebView: {
     flex: 1,
   },
 });
