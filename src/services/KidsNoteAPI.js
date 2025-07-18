@@ -283,7 +283,7 @@ class KidsNoteAPI {
 
   async getChildren() {
     try {
-      const { data } = await this.makeRequest(`${API_BASE}/me/info`);
+      const { data } = await this.makeRequest('/api/v1/me/info');
       
       if (data.children && Array.isArray(data.children)) {
         return {
@@ -376,20 +376,18 @@ class KidsNoteAPI {
       }
 
       const headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0',
       };
 
-      // 세션이 있으면 쿠키 헤더 추가
+      // 세션이 있으면 쿠키 헤더 추가 (origin.js와 동일한 형태)
       if (this.sessionID) {
-        headers['Cookie'] = `sessionid=${this.sessionID}`;
+        headers['Cookie'] = `sessionid=${this.sessionID};`;
       }
 
-      // URL이 상대경로인지 확인하고 절대경로로 변환
+      // URL 그대로 사용 (origin.js와 동일)
       let downloadUrl = url;
-      if (url && !url.startsWith('http')) {
-        downloadUrl = `${BASE_URL}${url.startsWith('/') ? url : '/' + url}`;
-        console.log(`🔗 상대경로 감지, 절대경로로 변환: ${downloadUrl}`);
-      }
+      console.log(`🔗 원본 URL: ${url}`);
+      console.log(`🔗 다운로드 URL: ${downloadUrl}`);
 
       console.log(`📥 다운로드 시작: ${downloadUrl}`);
       console.log(`🍪 세션 ID: ${this.sessionID ? this.sessionID.substring(0, 10) + '...' : '없음'}`);
