@@ -331,21 +331,28 @@ class KidsNoteAPI {
     }
   }
 
-  async getReports(childId, pageSize = 20, cursor = null) {
+  async getReports(childId, pageSize = 20, startDate = null, endDate = null) {
     try {
-      // origin.js와 동일한 엔드포인트 사용 (cursor 방식 페이지네이션)
+      // origin.js와 동일한 엔드포인트 사용
       let endpoint = `/api/v1_2/children/${childId}/reports/?page_size=${pageSize}&tz=Asia%2FSeoul&child=${childId}`;
       
-      // cursor가 있으면 추가
-      if (cursor) {
-        endpoint += `&cursor=${cursor}`;
+      // 날짜 필터링 파라미터 추가 (가장 일반적인 패턴만 시도)
+      if (startDate) {
+        endpoint += `&from_date=${startDate}`;
+      }
+      if (endDate) {
+        endpoint += `&to_date=${endDate}`;
       }
       
       console.log(`📋 getReports 요청: ${endpoint}`);
       console.log(`📋 최종 URL: ${BASE_URL}${endpoint}`);
-      console.log(`📋 childId: ${childId}, pageSize: ${pageSize}, cursor: ${cursor || 'null'}`);
+      console.log(`📋 childId: ${childId}, pageSize: ${pageSize}, startDate: ${startDate}, endDate: ${endDate}`);
       const { data } = await this.makeRequest(endpoint);
-      console.log(`📋 getReports 응답:`, JSON.stringify(data, null, 2));
+      console.log(`📋 getReports 응답 요약:`, {
+        resultsCount: data.results ? data.results.length : 0,
+        hasNext: data.next !== null,
+        nextUrl: data.next ? data.next.substring(0, 100) + '...' : null
+      });
       
       // 이미지/비디오 URL 구조 상세 확인
       if (data.results && data.results.length > 0) {
@@ -381,21 +388,28 @@ class KidsNoteAPI {
     }
   }
 
-  async getAlbums(childId, pageSize = 20, cursor = null) {
+  async getAlbums(childId, pageSize = 20, startDate = null, endDate = null) {
     try {
-      // origin.js와 동일한 엔드포인트 사용 (cursor 방식 페이지네이션)
+      // origin.js와 동일한 엔드포인트 사용
       let endpoint = `/api/v1_2/children/${childId}/albums/?page_size=${pageSize}&tz=Asia%2FSeoul&child=${childId}`;
       
-      // cursor가 있으면 추가
-      if (cursor) {
-        endpoint += `&cursor=${cursor}`;
+      // 날짜 필터링 파라미터 추가 (가장 일반적인 패턴만 시도)
+      if (startDate) {
+        endpoint += `&from_date=${startDate}`;
+      }
+      if (endDate) {
+        endpoint += `&to_date=${endDate}`;
       }
       
       console.log(`📸 getAlbums 요청: ${endpoint}`);
       console.log(`📸 최종 URL: ${BASE_URL}${endpoint}`);
-      console.log(`📸 childId: ${childId}, pageSize: ${pageSize}, cursor: ${cursor || 'null'}`);
+      console.log(`📸 childId: ${childId}, pageSize: ${pageSize}, startDate: ${startDate}, endDate: ${endDate}`);
       const { data } = await this.makeRequest(endpoint);
-      console.log(`📸 getAlbums 응답:`, JSON.stringify(data, null, 2));
+      console.log(`📸 getAlbums 응답 요약:`, {
+        resultsCount: data.results ? data.results.length : 0,
+        hasNext: data.next !== null,
+        nextUrl: data.next ? data.next.substring(0, 100) + '...' : null
+      });
       
       // 이미지/비디오 URL 구조 상세 확인
       if (data.results && data.results.length > 0) {

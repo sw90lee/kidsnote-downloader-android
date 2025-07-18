@@ -111,6 +111,30 @@ class DownloadManager {
     }
   }
 
+  // origin.js 방식: 재시도 로직 포함한 다운로드
+  async downloadWithRetry(url, destinationPath, onProgress, retries = 5) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const result = await KidsNoteAPI.downloadFile(url, destinationPath, onProgress);
+        
+        if (result.success) {
+          return result;
+        } else {
+          throw new Error(result.error);
+        }
+      } catch (error) {
+        if (attempt < retries) {
+          this.log(`❌ 다운로드 실패 (${attempt}/${retries}): ${error.message}`);
+          this.log(`🔄 5초 후 재시도...`);
+          await new Promise(resolve => setTimeout(resolve, 5000)); // origin.js와 동일한 5초 대기
+        } else {
+          this.log(`❌ 최종 다운로드 실패 (${retries}번 시도): ${error.message}`);
+          return { success: false, error: error.message };
+        }
+      }
+    }
+  }
+
   async processImages(images, childName, className, formattedDate, downloadPath) {
     const results = [];
     
@@ -122,11 +146,11 @@ class DownloadManager {
           ? `${formattedDate}-${className}-${childName}-${image.id}${extension}`
           : `${formattedDate}-${childName}-${image.id}${extension}`;
         
-        this.log(`이미지 다운로드 중: ${fileName}`);
-        this.log(`🔍 이미지 객체 전체:`, JSON.stringify(image, null, 2));
-        this.log(`🔗 이미지 URL: ${image.original}`);
+        // origin.js 방식: 상세 로그 최소화
+        this.log(`📥 이미지 다운로드: ${fileName}`);
         
-        const result = await KidsNoteAPI.downloadFile(
+        // origin.js 방식: 재시도 로직 포함한 다운로드
+        const result = await this.downloadWithRetry(
           image.original,
           `KidsNote/${fileName}`,
           (progress) => {
@@ -139,16 +163,18 @@ class DownloadManager {
                 fileName: fileName,
               });
             }
-          }
+          },
+          5  // origin.js와 동일한 5번 재시도
         );
 
         if (result.success) {
           results.push(result);
-          this.log(`✅ 다운로드 완료: ${fileName}`);
+          // origin.js 방식: 성공 시 조용히 처리
         } else {
           this.log(`❌ 다운로드 실패: ${fileName} - ${result.error}`);
         }
 
+        // origin.js와 동일한 0.1초 대기
         await new Promise(resolve => setTimeout(resolve, 100));
       } catch (error) {
         this.log(`❌ 이미지 처리 오류: ${error.message}`);
@@ -165,12 +191,12 @@ class DownloadManager {
         ? `${formattedDate}-${className}-${childName}-${video.id}${extension}`
         : `${formattedDate}-${childName}-${video.id}${extension}`;
       
-      this.log(`동영상 다운로드 중: ${fileName}`);
-      this.log(`🔍 동영상 객체 전체:`, JSON.stringify(video, null, 2));
+      // origin.js 방식: 상세 로그 최소화
+      this.log(`🎥 동영상 다운로드: ${fileName}`);
       const videoUrl = video.high || video.original;
-      this.log(`🔗 동영상 URL: ${videoUrl}`);
       
-      const result = await KidsNoteAPI.downloadFile(
+      // origin.js 방식: 재시도 로직 포함한 다운로드
+      const result = await this.downloadWithRetry(
         videoUrl,
         `KidsNote/${fileName}`,
         (progress) => {
@@ -183,11 +209,12 @@ class DownloadManager {
               fileName: fileName,
             });
           }
-        }
+        },
+        5  // origin.js와 동일한 5번 재시도
       );
 
       if (result.success) {
-        this.log(`✅ 동영상 다운로드 완료: ${fileName}`);
+        // origin.js 방식: 성공 시 조용히 처리
         return result;
       } else {
         this.log(`❌ 동영상 다운로드 실패: ${fileName} - ${result.error}`);
@@ -281,34 +308,34 @@ class DownloadManager {
         this.log(`날짜 필터: ${startDate || '제한없음'} ~ ${endDate || '제한없음'}`);
       }
 
-      let allEntries = [];
-      let cursor = null;
-      let hasMore = true;
-      let pageNum = 1;
+      // origin.js 방식 완전 적용: 재귀적으로 더 큰 page_size로 요청
+      const allEntries = await this.getJsonRecursive(childId, type, isReport, 'all', 1, startDate, endDate);
+      this.log(`✅ 모든 데이터 로딩 완료! 총 ${allEntries.length}개 항목`);
 
-      while (hasMore) {
-        const result = isReport 
-          ? await KidsNoteAPI.getReports(childId, 50, cursor)
-          : await KidsNoteAPI.getAlbums(childId, 50, cursor);
-
-        if (!result.success) {
-          throw new Error(result.error);
-        }
-
-        allEntries = allEntries.concat(result.data.results || []);
+      // 날짜 필터링 정보 출력
+      if (startDate || endDate) {
+        this.log(`📅 날짜 필터링 적용 중: ${startDate || '시작일 없음'} ~ ${endDate || '종료일 없음'}`);
         
-        // cursor 방식 페이지네이션
-        hasMore = result.data.next !== null;
-        if (hasMore && result.data.next) {
-          // next URL에서 cursor 값 추출
-          const nextUrl = new URL(result.data.next);
-          cursor = nextUrl.searchParams.get('cursor');
-        }
+        // 필터링 전 총 항목 수
+        this.log(`📊 필터링 전 총 항목 수: ${allEntries.length}`);
         
-        pageNum++;
+        // 날짜 필터링 테스트
+        const filteredEntries = allEntries.filter(entry => {
+          let rawDate;
+          
+          if (isReport) {
+            rawDate = entry.date_written;
+          } else {
+            rawDate = entry.modified ? entry.modified.split('T')[0] : null;
+          }
+          
+          return KidsNoteAPI.isDateInRange(rawDate, startDate, endDate);
+        });
         
-        if (hasMore) {
-          this.log(`페이지 ${pageNum} 데이터 로딩 중... (cursor: ${cursor || 'null'})`);
+        this.log(`📊 필터링 후 항목 수: ${filteredEntries.length}`);
+        
+        if (filteredEntries.length === 0) {
+          this.log(`⚠️ 설정된 날짜 범위에 해당하는 데이터가 없습니다.`);
         }
       }
 
@@ -322,6 +349,44 @@ class DownloadManager {
       return { success: false, error: error.message };
     } finally {
       this.isDownloading = false;
+    }
+  }
+
+  // origin.js의 getJson 함수를 React Native로 구현
+  async getJsonRecursive(childId, type, isReport, size, index, startDate = null, endDate = null) {
+    // origin.js와 동일한 로직: size === 'all' ? 9999 * index : size
+    const downloadSize = size === 'all' ? 9999 * index : size;
+    
+    this.log(`📄 재귀 호출 ${index}번째 - page_size: ${downloadSize}`);
+    
+    const result = isReport 
+      ? await KidsNoteAPI.getReports(childId, downloadSize, startDate, endDate)
+      : await KidsNoteAPI.getAlbums(childId, downloadSize, startDate, endDate);
+
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+
+    this.log(`📊 응답 데이터 상태:`, {
+      resultsCount: result.data.results ? result.data.results.length : 0,
+      hasNext: result.data.next !== null,
+      nextUrl: result.data.next ? result.data.next.substring(0, 50) + '...' : null
+    });
+
+    // origin.js 로직: next가 있으면 index + 1로 재귀 호출
+    if (size === 'all' && result.data.next !== null) {
+      this.log(`📄 더 많은 데이터가 있습니다. 재귀 호출 ${index + 1}번째 시작...`);
+      
+      // 무한 루프 방지: 최대 10번까지만
+      if (index >= 10) {
+        this.log(`⚠️ 최대 재귀 호출 수(10)에 도달했습니다. 현재까지의 데이터로 진행합니다.`);
+        return result.data.results || [];
+      }
+      
+      return await this.getJsonRecursive(childId, type, isReport, size, index + 1, startDate, endDate);
+    } else {
+      // 더 이상 데이터가 없거나 size가 'all'이 아닌 경우
+      return result.data.results || [];
     }
   }
 
