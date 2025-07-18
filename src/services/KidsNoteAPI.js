@@ -375,14 +375,10 @@ class KidsNoteAPI {
         await this.loadSession();
       }
 
+      // origin.js에서는 쿠키 없이 직접 다운로드 (URL에 인증 정보 포함)
       const headers = {
         'User-Agent': 'Mozilla/5.0',
       };
-
-      // 세션이 있으면 쿠키 헤더 추가 (origin.js와 동일한 형태)
-      if (this.sessionID) {
-        headers['Cookie'] = `sessionid=${this.sessionID};`;
-      }
 
       // URL 그대로 사용 (origin.js와 동일)
       let downloadUrl = url;
