@@ -1,5 +1,5 @@
 import RNFS from 'react-native-fs';
-import { PermissionsAndroid, Platform } from 'react-native';
+import { PermissionsAndroid, Platform, Alert, Linking } from 'react-native';
 import KidsNoteAPI from './KidsNoteAPI';
 
 class DownloadManager {
@@ -30,18 +30,64 @@ class DownloadManager {
     }
 
     try {
-      const granted = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-        {
-          title: '저장소 권한',
-          message: '파일을 다운로드하기 위해 저장소 접근 권한이 필요합니다.',
-          buttonNeutral: '나중에',
-          buttonNegative: '취소',
-          buttonPositive: '확인',
-        }
-      );
+      if (Platform.Version >= 33) {
+        // Android 13 이상: 이미지, 비디오, 오디오 권한 요청
+        const granted = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
+          PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO,
+        ]);
 
-      return granted === PermissionsAndroid.RESULTS.GRANTED;
+        const allGranted = Object.values(granted).every(
+          result => result === PermissionsAndroid.RESULTS.GRANTED
+        );
+
+        if (!allGranted) {
+          Alert.alert(
+            '파일 및 미디어 권한 필요',
+            '파일 다운로드를 위해 "파일 및 미디어" 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
+            [
+              { text: '취소', style: 'cancel' },
+              { 
+                text: '설정으로 이동', 
+                onPress: () => Linking.openSettings()
+              }
+            ]
+          );
+          return false;
+        }
+
+        return true;
+      } else if (Platform.Version >= 30) {
+        // Android 11~12: MANAGE_EXTERNAL_STORAGE는 직접 요청할 수 없음
+        Alert.alert(
+          '저장소 권한 필요',
+          '파일 다운로드를 위해 "모든 파일에 액세스" 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
+          [
+            { text: '취소', style: 'cancel' },
+            { 
+              text: '설정으로 이동', 
+              onPress: () => Linking.openSettings()
+            }
+          ]
+        );
+        return false;
+      } else {
+        // Android 10 이하: WRITE_EXTERNAL_STORAGE 요청
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+          {
+            title: '저장소 권한',
+            message: '파일을 다운로드하기 위해 저장소 접근 권한이 필요합니다.',
+            buttonNeutral: '나중에',
+            buttonNegative: '취소',
+            buttonPositive: '확인',
+          }
+        );
+
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      }
+      
     } catch (error) {
       console.error('Permission request error:', error);
       return false;
@@ -223,11 +269,6 @@ class DownloadManager {
     try {
       this.isDownloading = true;
       
-      const hasPermission = await this.requestStoragePermission();
-      if (!hasPermission) {
-        throw new Error('저장소 권한이 필요합니다.');
-      }
-
       const downloadPath = await this.createDownloadDirectory();
       
       this.log(`다운로드 시작 - 자녀 ID: ${childId}`);
