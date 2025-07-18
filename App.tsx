@@ -26,85 +26,9 @@ function App(): React.JSX.Element {
   const [downloadConfig, setDownloadConfig] = useState<any>(null);
 
   useEffect(() => {
-    // Request permissions and clear cookies
+    // Clear cookies on app start
     const initializeApp = async () => {
-      // Request storage permissions
-      if (Platform.OS === 'android') {
-        try {
-          // Check if we need to request All Files Access for Android 11+
-          if (Platform.Version >= 30) {
-            // For Android 11+, we need All Files Access permission
-            Alert.alert(
-              '저장소 권한 필요',
-              '파일 다운로드를 위해 "모든 파일에 액세스" 권한이 필요합니다. 설정 페이지로 이동하시겠습니까?',
-              [
-                { text: '취소', style: 'cancel' },
-                { 
-                  text: '설정으로 이동', 
-                  onPress: async () => {
-                    try {
-                      await Linking.openSettings();
-                    } catch (error) {
-                      console.error('Failed to open settings:', error);
-                    }
-                  }
-                }
-              ]
-            );
-          } else {
-            // For Android 10 and below, use regular permissions
-            const permissions = [
-              PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-              PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-            ];
-
-            const granted = await PermissionsAndroid.requestMultiple(permissions);
-            
-            console.log('Permission results:', granted);
-            
-            const allGranted = Object.values(granted).every(
-              result => result === PermissionsAndroid.RESULTS.GRANTED
-            );
-            
-            if (!allGranted) {
-              Alert.alert(
-                '권한 필요',
-                '파일 다운로드를 위해 저장소 권한이 필요합니다.',
-                [
-                  { text: '취소', style: 'cancel' },
-                  { 
-                    text: '설정으로 이동', 
-                    onPress: async () => {
-                      try {
-                        await Linking.openSettings();
-                      } catch (error) {
-                        console.error('Failed to open settings:', error);
-                      }
-                    }
-                  }
-                ]
-              );
-            }
-          }
-
-          // For Android 13+, also request media permissions
-          if (Platform.Version >= 33) {
-            const mediaPermissions = [
-              PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
-              PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO,
-              PermissionsAndroid.PERMISSIONS.READ_MEDIA_AUDIO
-            ];
-
-            const mediaGranted = await PermissionsAndroid.requestMultiple(mediaPermissions);
-            console.log('Media permission results:', mediaGranted);
-          }
-
-        } catch (error) {
-          console.error('Permission request error:', error);
-        }
-      }
-
-      // Clear existing cookies
+      // Clear any existing cookies
       try {
         await CookieManager.clearAll();
         console.log('Cookies cleared');
