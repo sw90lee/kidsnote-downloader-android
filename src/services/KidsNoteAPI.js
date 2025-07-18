@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
 import axios from 'axios';
-// import CookieManager from '@react-native-cookies/cookies';
+import CookieManager from '@react-native-cookies/cookies';
 
 const BASE_URL = 'https://www.kidsnote.com';
 const API_BASE = '/api/v1_2';
@@ -26,6 +26,10 @@ class KidsNoteAPI {
     try {
       console.log('Making request to:', url);
       
+      // CookieManager에서 쿠키 가져오기
+      const cookies = await CookieManager.get(BASE_URL);
+      console.log('🍪 요청에 사용할 쿠키:', cookies);
+      
       const config = {
         method: options.method || 'GET',
         url: endpoint,
@@ -35,7 +39,11 @@ class KidsNoteAPI {
         ...options,
       };
 
-      if (this.sessionID) {
+      // sessionid 쿠키 설정 (우선순위: CookieManager > this.sessionID)
+      if (cookies.sessionid) {
+        config.headers.Cookie = `sessionid=${cookies.sessionid.value}`;
+        this.sessionID = cookies.sessionid.value; // 동기화
+      } else if (this.sessionID) {
         config.headers.Cookie = `sessionid=${this.sessionID}`;
       }
 
@@ -64,8 +72,8 @@ class KidsNoteAPI {
     console.log('🔐 로그인 시작:', username);
     
     try {
-      // 쿠키 초기화 (CookieManager 임시 비활성화)
-      // await CookieManager.clearAll();
+      // 쿠키 초기화
+      await CookieManager.clearAll();
       
       // 1단계: 로그인 페이지에서 CSRF 토큰 가져오기
       console.log('📋 1단계: 로그인 페이지에서 CSRF 토큰 가져오기...');
@@ -141,9 +149,20 @@ class KidsNoteAPI {
       console.log('🔑 로그인 응답 상태:', loginResponse.status);
       console.log('🔑 로그인 응답 헤더:', loginResponse.headers);
 
-      // 응답 헤더에서 쿠키 확인 (CookieManager 대신)
+      // CookieManager에서 쿠키 확인
+      const cookies = await CookieManager.get(BASE_URL);
+      console.log('🍪 CookieManager에서 가져온 쿠키:', cookies);
+      
+      if (cookies.sessionid) {
+        this.sessionID = cookies.sessionid.value;
+        await AsyncStorage.setItem('kidsnote_session', this.sessionID);
+        console.log('✅ 로그인 성공! 세션 ID:', this.sessionID);
+        return { success: true, sessionID: this.sessionID };
+      }
+      
+      // 응답 헤더에서도 확인 (백업)
       const setCookieHeader = loginResponse.headers['set-cookie'];
-      console.log('🍪 응답 헤더에서 가져온 쿠키:', setCookieHeader);
+      console.log('🍪 응답 헤더에서 가져온 쿠키 (백업):', setCookieHeader);
       
       if (setCookieHeader) {
         const sessionMatch = setCookieHeader.find(cookie => cookie.includes('sessionid='));
@@ -152,7 +171,7 @@ class KidsNoteAPI {
           if (sessionId) {
             this.sessionID = sessionId;
             await AsyncStorage.setItem('kidsnote_session', this.sessionID);
-            console.log('✅ 로그인 성공! 세션 ID:', this.sessionID);
+            console.log('✅ 로그인 성공! (헤더에서) 세션 ID:', this.sessionID);
             return { success: true, sessionID: this.sessionID };
           }
         }
@@ -181,19 +200,13 @@ class KidsNoteAPI {
       // 리다이렉트 확인
       if (loginResponse.status === 302 || loginResponse.status === 301) {
         console.log('🔄 리다이렉트 감지됨 - 로그인 성공 가능성');
-        // 리다이렉트 시에도 쿠키 재확인
-        const redirectCookies = loginResponse.headers['set-cookie'];
-        if (redirectCookies) {
-          const sessionMatch = redirectCookies.find(cookie => cookie.includes('sessionid='));
-          if (sessionMatch) {
-            const sessionId = sessionMatch.match(/sessionid=([^;]*)/)?.[1];
-            if (sessionId) {
-              this.sessionID = sessionId;
-              await AsyncStorage.setItem('kidsnote_session', this.sessionID);
-              console.log('✅ 리다이렉트 후 로그인 성공! 세션 ID:', this.sessionID);
-              return { success: true, sessionID: this.sessionID };
-            }
-          }
+        // CookieManager에서 쿠키 다시 확인
+        const redirectCookies = await CookieManager.get(BASE_URL);
+        if (redirectCookies.sessionid) {
+          this.sessionID = redirectCookies.sessionid.value;
+          await AsyncStorage.setItem('kidsnote_session', this.sessionID);
+          console.log('✅ 리다이렉트 후 로그인 성공! 세션 ID:', this.sessionID);
+          return { success: true, sessionID: this.sessionID };
         }
       }
 
@@ -219,7 +232,7 @@ class KidsNoteAPI {
     try {
       this.sessionID = null;
       await AsyncStorage.removeItem('kidsnote_session');
-      // await CookieManager.clearAll(); // 임시 비활성화
+      await CookieManager.clearAll();
     } catch (error) {
       console.error('Logout error:', error);
     }
