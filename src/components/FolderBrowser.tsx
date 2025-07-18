@@ -8,6 +8,9 @@ import {
   Alert,
   TextInput,
   Modal,
+  PermissionsAndroid,
+  Platform,
+  Linking,
 } from 'react-native';
 import RNFS from 'react-native-fs';
 
@@ -40,8 +43,102 @@ const FolderBrowser: React.FC<FolderBrowserProps> = ({
   const [newFolderName, setNewFolderName] = useState('');
 
   useEffect(() => {
-    loadDirectory(currentPath);
+    checkPermissionsAndLoad();
   }, [currentPath]);
+
+  const checkPermissionsAndLoad = async () => {
+    const hasPermission = await checkStoragePermissions();
+    if (hasPermission) {
+      loadDirectory(currentPath);
+    } else {
+      // 권한이 없으면 닫기
+      onClose();
+    }
+  };
+
+  const checkStoragePermissions = async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') {
+      return true;
+    }
+
+    try {
+      // Android 11+ (API 30+)
+      if (Platform.Version >= 30) {
+        Alert.alert(
+          '저장소 권한 필요',
+          '폴더 브라우저를 사용하려면 "모든 파일에 액세스" 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
+          [
+            { text: '취소', style: 'cancel', onPress: () => onClose() },
+            { 
+              text: '설정으로 이동', 
+              onPress: async () => {
+                try {
+                  await Linking.openSettings();
+                  onClose();
+                } catch (error) {
+                  console.error('Failed to open settings:', error);
+                  onClose();
+                }
+              }
+            }
+          ]
+        );
+        return false;
+      } else {
+        // Android 10 이하
+        const permissions = [
+          PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+        ];
+
+        const granted = await PermissionsAndroid.requestMultiple(permissions);
+        
+        const allGranted = Object.values(granted).every(
+          result => result === PermissionsAndroid.RESULTS.GRANTED
+        );
+        
+        if (!allGranted) {
+          Alert.alert(
+            '권한 필요',
+            '폴더 브라우저를 사용하려면 저장소 권한이 필요합니다.',
+            [
+              { text: '취소', style: 'cancel', onPress: () => onClose() },
+              { 
+                text: '설정으로 이동', 
+                onPress: async () => {
+                  try {
+                    await Linking.openSettings();
+                    onClose();
+                  } catch (error) {
+                    console.error('Failed to open settings:', error);
+                    onClose();
+                  }
+                }
+              }
+            ]
+          );
+          return false;
+        }
+
+        // Android 13+ 미디어 권한 추가 요청
+        if (Platform.Version >= 33) {
+          const mediaPermissions = [
+            PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+            PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO
+          ];
+
+          await PermissionsAndroid.requestMultiple(mediaPermissions);
+        }
+
+        return true;
+      }
+    } catch (error) {
+      console.error('Permission check error:', error);
+      Alert.alert('오류', '권한 확인 중 오류가 발생했습니다.');
+      onClose();
+      return false;
+    }
+  };
 
   const loadDirectory = async (path: string) => {
     setLoading(true);
@@ -98,6 +195,12 @@ const FolderBrowser: React.FC<FolderBrowserProps> = ({
       return;
     }
 
+    // 권한 재확인
+    const hasPermission = await checkStoragePermissions();
+    if (!hasPermission) {
+      return;
+    }
+
     const newFolderPath = `${currentPath}/${newFolderName.trim()}`;
     
     try {
@@ -115,7 +218,7 @@ const FolderBrowser: React.FC<FolderBrowserProps> = ({
       Alert.alert('성공', `'${newFolderName}' 폴더가 생성되었습니다.`);
     } catch (error) {
       console.error('Failed to create folder:', error);
-      Alert.alert('오류', '폴더를 생성할 수 없습니다.');
+      Alert.alert('오류', '폴더를 생성할 수 없습니다. 권한을 확인해주세요.');
     }
   };
 
