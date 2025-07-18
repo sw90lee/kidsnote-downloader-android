@@ -7,10 +7,12 @@ import {
   Alert,
   ScrollView,
   TextInput,
+  Modal,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import RNFS from 'react-native-fs';
 import DocumentPicker from '@react-native-documents/picker';
+import FolderBrowser from './FolderBrowser';
 
 interface StorageSettingsProps {
   onClose: () => void;
@@ -21,6 +23,7 @@ const StorageSettings: React.FC<StorageSettingsProps> = ({ onClose, onSave }) =>
   const [currentPath, setCurrentPath] = useState<string>('');
   const [customPath, setCustomPath] = useState<string>('');
   const [availablePaths, setAvailablePaths] = useState<string[]>([]);
+  const [showFolderBrowser, setShowFolderBrowser] = useState<boolean>(false);
 
   useEffect(() => {
     loadCurrentPath();
@@ -74,6 +77,17 @@ const StorageSettings: React.FC<StorageSettingsProps> = ({ onClose, onSave }) =>
         Alert.alert('오류', '폴더 선택 중 오류가 발생했습니다.');
       }
     }
+  };
+
+  const openFolderBrowser = () => {
+    setShowFolderBrowser(true);
+  };
+
+  const handleFolderBrowserSelect = (selectedPath: string) => {
+    const finalPath = `${selectedPath}/KidsNote`;
+    setCustomPath(finalPath);
+    setShowFolderBrowser(false);
+    Alert.alert('폴더 선택됨', `선택된 경로: ${finalPath}`);
   };
 
   const validateAndCreatePath = async (path: string): Promise<boolean> => {
@@ -173,9 +187,15 @@ const StorageSettings: React.FC<StorageSettingsProps> = ({ onClose, onSave }) =>
           multiline
         />
         
-        <TouchableOpacity style={styles.browseButton} onPress={selectFolder}>
-          <Text style={styles.browseButtonText}>📁 폴더 선택</Text>
-        </TouchableOpacity>
+        <View style={styles.buttonGroup}>
+          <TouchableOpacity style={styles.browseButton} onPress={selectFolder}>
+            <Text style={styles.browseButtonText}>📁 시스템 선택</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.explorerButton} onPress={openFolderBrowser}>
+            <Text style={styles.explorerButtonText}>🗂️ 탐색기</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.buttonContainer}>
@@ -197,6 +217,19 @@ const StorageSettings: React.FC<StorageSettingsProps> = ({ onClose, onSave }) =>
           • 쓰기 권한이 있는 폴더만 선택 가능합니다
         </Text>
       </View>
+
+      {/* 폴더 브라우저 모달 */}
+      <Modal
+        visible={showFolderBrowser}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <FolderBrowser
+          onSelectFolder={handleFolderBrowserSelect}
+          onClose={() => setShowFolderBrowser(false)}
+          initialPath={RNFS.ExternalStorageDirectoryPath}
+        />
+      </Modal>
     </ScrollView>
   );
 };
@@ -283,13 +316,30 @@ const styles = StyleSheet.create({
     textAlignVertical: 'top',
     fontFamily: 'monospace',
   },
+  buttonGroup: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   browseButton: {
+    flex: 1,
     backgroundColor: '#28a745',
     padding: 12,
     borderRadius: 6,
     alignItems: 'center',
   },
   browseButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  explorerButton: {
+    flex: 1,
+    backgroundColor: '#007bff',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  explorerButtonText: {
     color: 'white',
     fontWeight: 'bold',
     fontSize: 14,
