@@ -34,7 +34,21 @@ class KidsNoteAPI {
   }
 
   async makeRequest(endpoint, options = {}) {
+    console.log('🔍 makeRequest 호출:');
+    console.log('  - endpoint:', endpoint);
+    console.log('  - BASE_URL:', BASE_URL);
+    console.log('  - endpoint 타입:', typeof endpoint);
+    console.log('  - endpoint 길이:', endpoint ? endpoint.length : 'undefined');
+    
+    // URL 구성 전 유효성 검사
+    if (!endpoint) {
+      console.error('❌ endpoint가 비어있습니다!');
+      throw new Error('API 엔드포인트가 정의되지 않았습니다.');
+    }
+    
     const url = `${BASE_URL}${endpoint}`;
+    console.log('  - 최종 URL:', url);
+    console.log('  - URL 길이:', url.length);
     
     try {
       console.log('🌐 API 요청:', url);
@@ -92,7 +106,12 @@ class KidsNoteAPI {
         } else if (response.status === 403) {
           throw new Error('접근 권한이 없습니다. 로그인을 확인해주세요.');
         } else if (response.status === 404) {
-          throw new Error(`API 엔드포인트를 찾을 수 없습니다: ${url}`);
+          console.log('🔍 404 에러 상세 정보:');
+          console.log('  - URL:', url);
+          console.log('  - endpoint:', endpoint);
+          console.log('  - 에러 본문:', errorText);
+          console.log('  - URL 확인:', url || 'URL이 undefined입니다');
+          throw new Error(`API 엔드포인트를 찾을 수 없습니다: ${url || '정의되지 않은 URL'}`);
         } else {
           throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
         }
@@ -312,13 +331,19 @@ class KidsNoteAPI {
     }
   }
 
-  async getReports(childId, pageSize = 20, page = 1) {
+  async getReports(childId, pageSize = 20, cursor = null) {
     try {
-      // origin.js와 동일한 엔드포인트 사용
-      const endpoint = `/api/v1_2/children/${childId}/reports/?page_size=${pageSize}&page=${page}&tz=Asia%2FSeoul&child=${childId}`;
+      // origin.js와 동일한 엔드포인트 사용 (cursor 방식 페이지네이션)
+      let endpoint = `/api/v1_2/children/${childId}/reports/?page_size=${pageSize}&tz=Asia%2FSeoul&child=${childId}`;
+      
+      // cursor가 있으면 추가
+      if (cursor) {
+        endpoint += `&cursor=${cursor}`;
+      }
+      
       console.log(`📋 getReports 요청: ${endpoint}`);
       console.log(`📋 최종 URL: ${BASE_URL}${endpoint}`);
-      console.log(`📋 childId: ${childId}, pageSize: ${pageSize}, page: ${page}`);
+      console.log(`📋 childId: ${childId}, pageSize: ${pageSize}, cursor: ${cursor || 'null'}`);
       const { data } = await this.makeRequest(endpoint);
       console.log(`📋 getReports 응답:`, JSON.stringify(data, null, 2));
       
@@ -356,13 +381,19 @@ class KidsNoteAPI {
     }
   }
 
-  async getAlbums(childId, pageSize = 20, page = 1) {
+  async getAlbums(childId, pageSize = 20, cursor = null) {
     try {
-      // origin.js와 동일한 엔드포인트 사용
-      const endpoint = `/api/v1_2/children/${childId}/albums/?page_size=${pageSize}&page=${page}&tz=Asia%2FSeoul&child=${childId}`;
+      // origin.js와 동일한 엔드포인트 사용 (cursor 방식 페이지네이션)
+      let endpoint = `/api/v1_2/children/${childId}/albums/?page_size=${pageSize}&tz=Asia%2FSeoul&child=${childId}`;
+      
+      // cursor가 있으면 추가
+      if (cursor) {
+        endpoint += `&cursor=${cursor}`;
+      }
+      
       console.log(`📸 getAlbums 요청: ${endpoint}`);
       console.log(`📸 최종 URL: ${BASE_URL}${endpoint}`);
-      console.log(`📸 childId: ${childId}, pageSize: ${pageSize}, page: ${page}`);
+      console.log(`📸 childId: ${childId}, pageSize: ${pageSize}, cursor: ${cursor || 'null'}`);
       const { data } = await this.makeRequest(endpoint);
       console.log(`📸 getAlbums 응답:`, JSON.stringify(data, null, 2));
       

@@ -282,13 +282,14 @@ class DownloadManager {
       }
 
       let allEntries = [];
-      let page = 1;
+      let cursor = null;
       let hasMore = true;
+      let pageNum = 1;
 
       while (hasMore) {
         const result = isReport 
-          ? await KidsNoteAPI.getReports(childId, 50, page)
-          : await KidsNoteAPI.getAlbums(childId, 50, page);
+          ? await KidsNoteAPI.getReports(childId, 50, cursor)
+          : await KidsNoteAPI.getAlbums(childId, 50, cursor);
 
         if (!result.success) {
           throw new Error(result.error);
@@ -296,11 +297,18 @@ class DownloadManager {
 
         allEntries = allEntries.concat(result.data.results || []);
         
+        // cursor 방식 페이지네이션
         hasMore = result.data.next !== null;
-        page++;
+        if (hasMore && result.data.next) {
+          // next URL에서 cursor 값 추출
+          const nextUrl = new URL(result.data.next);
+          cursor = nextUrl.searchParams.get('cursor');
+        }
+        
+        pageNum++;
         
         if (hasMore) {
-          this.log(`페이지 ${page} 데이터 로딩 중...`);
+          this.log(`페이지 ${pageNum} 데이터 로딩 중... (cursor: ${cursor || 'null'})`);
         }
       }
 
