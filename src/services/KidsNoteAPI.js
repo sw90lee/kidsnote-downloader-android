@@ -294,9 +294,11 @@ class KidsNoteAPI {
     }
   }
 
-  async downloadFile(url, destinationPath, onProgress) {
+  async downloadFile(url, destinationPath, onProgress, customPath = null) {
     try {
-      const downloadDest = `${RNFS.DocumentDirectoryPath}/${destinationPath}`;
+      // Use custom path if provided, otherwise default to DocumentDirectory
+      const basePath = customPath || RNFS.DocumentDirectoryPath;
+      const downloadDest = `${basePath}/${destinationPath}`;
       const dirPath = downloadDest.substring(0, downloadDest.lastIndexOf('/'));
       
       await RNFS.mkdir(dirPath);
@@ -350,6 +352,26 @@ class KidsNoteAPI {
     }
     
     return true;
+  }
+
+  async getDownloadPath() {
+    try {
+      const savedPath = await AsyncStorage.getItem('download_path');
+      return savedPath || `${RNFS.ExternalStorageDirectoryPath}/Download/KidsNote`;
+    } catch (error) {
+      console.error('Failed to get download path:', error);
+      return `${RNFS.ExternalStorageDirectoryPath}/Download/KidsNote`;
+    }
+  }
+
+  async setDownloadPath(path) {
+    try {
+      await AsyncStorage.setItem('download_path', path);
+      return true;
+    } catch (error) {
+      console.error('Failed to set download path:', error);
+      return false;
+    }
   }
 }
 

@@ -7,8 +7,10 @@ import {
   Alert,
   ScrollView,
   Switch,
+  Modal,
 } from 'react-native';
 import DatePicker from 'react-native-date-picker';
+import StorageSettings from './StorageSettings';
 
 const DownloadOptions = ({ selectedChildren, onStartDownload }) => {
   const [contentType, setContentType] = useState('all'); // all, 1(images), 2(videos)
@@ -18,6 +20,8 @@ const DownloadOptions = ({ selectedChildren, onStartDownload }) => {
   const [endDate, setEndDate] = useState(new Date());
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [showStorageSettings, setShowStorageSettings] = useState(false);
+  const [downloadPath, setDownloadPath] = useState('');
 
   const contentTypes = [
     { id: 'all', label: '이미지 + 동영상' },
@@ -38,6 +42,7 @@ const DownloadOptions = ({ selectedChildren, onStartDownload }) => {
       useAllData,
       startDate: useAllData ? null : startDate.toISOString().split('T')[0],
       endDate: useAllData ? null : endDate.toISOString().split('T')[0],
+      downloadPath,
     };
 
     // 날짜 유효성 검사
@@ -154,6 +159,21 @@ const DownloadOptions = ({ selectedChildren, onStartDownload }) => {
         )}
       </View>
 
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>저장소 설정</Text>
+        <TouchableOpacity
+          style={styles.storageButton}
+          onPress={() => setShowStorageSettings(true)}
+        >
+          <Text style={styles.storageButtonText}>📁 저장 경로 설정</Text>
+        </TouchableOpacity>
+        {downloadPath ? (
+          <Text style={styles.currentPathText}>
+            현재 경로: {downloadPath}
+          </Text>
+        ) : null}
+      </View>
+
       <TouchableOpacity
         style={styles.downloadButton}
         onPress={handleStartDownload}
@@ -194,6 +214,17 @@ const DownloadOptions = ({ selectedChildren, onStartDownload }) => {
         confirmText="확인"
         cancelText="취소"
       />
+
+      <Modal
+        visible={showStorageSettings}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <StorageSettings
+          onClose={() => setShowStorageSettings(false)}
+          onSave={(path) => setDownloadPath(path)}
+        />
+      </Modal>
     </ScrollView>
   );
 };
@@ -303,6 +334,26 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: '600',
+  },
+  storageButton: {
+    backgroundColor: '#28a745',
+    padding: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  storageButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  currentPathText: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'monospace',
+    backgroundColor: '#f8f8f8',
+    padding: 8,
+    borderRadius: 4,
   },
 });
 

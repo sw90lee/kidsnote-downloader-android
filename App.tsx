@@ -6,6 +6,9 @@ import {
   View,
   Text,
   TouchableOpacity,
+  PermissionsAndroid,
+  Platform,
+  Alert,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import CookieManager from '@react-native-cookies/cookies';
@@ -28,14 +31,54 @@ function App(): React.JSX.Element {
   const [sessionCookie, setSessionCookie] = useState<string | null>(null);
 
   useEffect(() => {
-    // Clear existing cookies and enable cookie management
-    CookieManager.clearAll()
-      .then(() => {
+    // Request permissions and clear cookies
+    const initializeApp = async () => {
+      // Request storage permissions
+      if (Platform.OS === 'android') {
+        try {
+          const permissions = [
+            PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+            PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+          ];
+
+          // For Android 13+, request media permissions
+          if (Platform.Version >= 33) {
+            permissions.push(
+              PermissionsAndroid.PERMISSIONS.READ_MEDIA_IMAGES,
+              PermissionsAndroid.PERMISSIONS.READ_MEDIA_VIDEO
+            );
+          }
+
+          const granted = await PermissionsAndroid.requestMultiple(permissions);
+          
+          console.log('Permission results:', granted);
+          
+          const allGranted = Object.values(granted).every(
+            result => result === PermissionsAndroid.RESULTS.GRANTED
+          );
+          
+          if (!allGranted) {
+            Alert.alert(
+              '권한 필요',
+              '파일 다운로드를 위해 저장소 권한이 필요합니다. 설정에서 권한을 허용해주세요.',
+              [{ text: '확인' }]
+            );
+          }
+        } catch (error) {
+          console.error('Permission request error:', error);
+        }
+      }
+
+      // Clear existing cookies
+      try {
+        await CookieManager.clearAll();
         console.log('Cookies cleared');
-      })
-      .catch((error) => {
+      } catch (error) {
         console.error('Failed to clear cookies:', error);
-      });
+      }
+    };
+
+    initializeApp();
   }, []);
 
   const checkLoginAndExtractCookie = async () => {
