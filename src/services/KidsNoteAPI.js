@@ -9,6 +9,8 @@ const API_BASE = '/api/v1_2';
 class KidsNoteAPI {
   constructor() {
     this.sessionID = null;
+    
+    // 로그인 전용 axios 인스턴스 (기존)
     this.axiosInstance = axios.create({
       baseURL: BASE_URL,
       timeout: 30000,
@@ -18,52 +20,109 @@ class KidsNoteAPI {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
     });
+    
+    // API 호출 전용 axios 인스턴스 (새로 생성)
+    this.apiInstance = axios.create({
+      baseURL: BASE_URL,
+      timeout: 30000,
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+        'Referer': BASE_URL,
+      },
+    });
   }
 
   async makeRequest(endpoint, options = {}) {
+    console.log('🔍 makeRequest 호출:');
+    console.log('  - endpoint:', endpoint);
+    console.log('  - BASE_URL:', BASE_URL);
+    console.log('  - endpoint 타입:', typeof endpoint);
+    console.log('  - endpoint 길이:', endpoint ? endpoint.length : 'undefined');
+    
+    // URL 구성 전 유효성 검사
+    if (!endpoint) {
+      console.error('❌ endpoint가 비어있습니다!');
+      throw new Error('API 엔드포인트가 정의되지 않았습니다.');
+    }
+    
     const url = `${BASE_URL}${endpoint}`;
+    console.log('  - 최종 URL:', url);
+    console.log('  - URL 길이:', url.length);
     
     try {
-      console.log('Making request to:', url);
+      console.log('🌐 API 요청:', url);
+      
+      // 세션 로드
+      if (!this.sessionID) {
+        await this.loadSession();
+      }
       
       // CookieManager에서 쿠키 가져오기
       const cookies = await CookieManager.get(BASE_URL);
-      console.log('🍪 요청에 사용할 쿠키:', cookies);
+      console.log('🍪 CookieManager 쿠키:', cookies);
+      console.log('🍪 현재 sessionID:', this.sessionID ? this.sessionID.substring(0, 10) + '...' : '없음');
       
-      const config = {
-        method: options.method || 'GET',
-        url: endpoint,
-        headers: {
-          ...options.headers,
-        },
-        ...options,
+      const headers = {
+        'Accept': 'application/json',
+        'User-Agent': 'Mozilla/5.0',
+        'Referer': BASE_URL,
+        ...options.headers,
       };
 
-      // sessionid 쿠키 설정 (우선순위: CookieManager > this.sessionID)
+      // sessionid 쿠키 설정 (origin.js와 동일한 형태)
       if (cookies.sessionid) {
-        config.headers.Cookie = `sessionid=${cookies.sessionid.value}`;
+        headers.Cookie = `sessionid=${cookies.sessionid.value};`;
         this.sessionID = cookies.sessionid.value; // 동기화
+        console.log('🍪 CookieManager 세션 사용:', cookies.sessionid.value.substring(0, 10) + '...');
       } else if (this.sessionID) {
-        config.headers.Cookie = `sessionid=${this.sessionID}`;
+        headers.Cookie = `sessionid=${this.sessionID};`;
+        console.log('🍪 저장된 세션 사용:', this.sessionID.substring(0, 10) + '...');
+      } else {
+        console.log('❌ 세션 없음!');
+        throw new Error('세션이 필요합니다. 다시 로그인해주세요.');
       }
-
-      const response = await this.axiosInstance(config);
-      console.log('Response status:', response.status);
       
-      return { response, data: response.data };
+      console.log('🍪 최종 쿠키 헤더:', headers.Cookie);
+
+      console.log('🚀 요청 헤더:', JSON.stringify(headers, null, 2));
+      
+      const response = await fetch(url, {
+        method: options.method || 'GET',
+        headers,
+        ...options,
+      });
+
+      console.log('📊 응답 상태:', response.status, response.statusText);
+      console.log('📊 응답 헤더:', JSON.stringify([...response.headers.entries()], null, 2));
+      
+      if (!response.ok) {
+        // 응답 본문도 확인해보기
+        const errorText = await response.text();
+        console.log('❌ 에러 응답 본문:', errorText);
+        
+        if (response.status === 401) {
+          throw new Error('세션 만료! 다시 로그인해주세요.');
+        } else if (response.status === 403) {
+          throw new Error('접근 권한이 없습니다. 로그인을 확인해주세요.');
+        } else if (response.status === 404) {
+          console.log('🔍 404 에러 상세 정보:');
+          console.log('  - URL:', url);
+          console.log('  - endpoint:', endpoint);
+          console.log('  - 에러 본문:', errorText);
+          console.log('  - URL 확인:', url || 'URL이 undefined입니다');
+          throw new Error(`API 엔드포인트를 찾을 수 없습니다: ${url || '정의되지 않은 URL'}`);
+        } else {
+          throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+        }
+      }
+      
+      const data = await response.json();
+      console.log('📦 응답 데이터 크기:', JSON.stringify(data).length, 'bytes');
+      
+      return { response, data };
     } catch (error) {
       console.error('Request error:', error);
-      if (error.response?.status === 401) {
-        throw new Error('세션 만료! 다시 로그인해주세요.');
-      } else if (error.response?.status === 403) {
-        throw new Error('접근 권한이 없습니다. 로그인을 확인해주세요.');
-      } else if (error.response?.status >= 400) {
-        throw new Error(`HTTP ${error.response.status}: 서버 오류가 발생했습니다.`);
-      }
-      
-      if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-        throw new Error('네트워크 연결을 확인해주세요.');
-      }
       throw error;
     }
   }
@@ -252,7 +311,7 @@ class KidsNoteAPI {
 
   async getChildren() {
     try {
-      const { data } = await this.makeRequest(`${API_BASE}/me/info`);
+      const { data } = await this.makeRequest('/api/v1/me/info');
       
       if (data.children && Array.isArray(data.children)) {
         return {
@@ -272,10 +331,56 @@ class KidsNoteAPI {
     }
   }
 
-  async getReports(childId, pageSize = 20, page = 1) {
+  async getReports(childId, pageSize = 20, startDate = null, endDate = null) {
     try {
-      const endpoint = `${API_BASE}/children/${childId}/reports/?page_size=${pageSize}&page=${page}&tz=Asia%2FSeoul&child=${childId}`;
+      // origin.js와 동일한 엔드포인트 사용
+      let endpoint = `/api/v1_2/children/${childId}/reports/?page_size=${pageSize}&tz=Asia%2FSeoul&child=${childId}`;
+      
+      // 날짜 필터링 파라미터 추가 (가장 일반적인 패턴만 시도)
+      if (startDate) {
+        endpoint += `&from_date=${startDate}`;
+      }
+      if (endDate) {
+        endpoint += `&to_date=${endDate}`;
+      }
+      
+      console.log(`📋 getReports 요청: ${endpoint}`);
+      console.log(`📋 최종 URL: ${BASE_URL}${endpoint}`);
+      console.log(`📋 childId: ${childId}, pageSize: ${pageSize}, startDate: ${startDate}, endDate: ${endDate}`);
       const { data } = await this.makeRequest(endpoint);
+      console.log(`📋 getReports 응답 요약:`, {
+        resultsCount: data.results ? data.results.length : 0,
+        hasNext: data.next !== null,
+        nextUrl: data.next ? data.next.substring(0, 100) + '...' : null
+      });
+      
+      // 이미지/비디오 URL 구조 상세 확인
+      if (data.results && data.results.length > 0) {
+        const firstReport = data.results[0];
+        console.log(`📋 첫 번째 리포트 샘플:`, JSON.stringify(firstReport, null, 2));
+        
+        if (firstReport.attached_images && firstReport.attached_images.length > 0) {
+          const firstImage = firstReport.attached_images[0];
+          console.log(`🖼️ 첫 번째 이미지 정보:`, JSON.stringify(firstImage, null, 2));
+          console.log(`🔗 이미지 original URL: ${firstImage.original}`);
+          console.log(`🔗 이미지 original_file_name: ${firstImage.original_file_name}`);
+          
+          // URL이 상대경로인지 절대경로인지 확인
+          if (firstImage.original) {
+            console.log(`🔍 URL 분석:`);
+            console.log(`  - 시작 문자: ${firstImage.original.substring(0, 20)}...`);
+            console.log(`  - http로 시작: ${firstImage.original.startsWith('http')}`);
+            console.log(`  - /로 시작: ${firstImage.original.startsWith('/')}`);
+          }
+        }
+        
+        if (firstReport.attached_video) {
+          console.log(`🎥 비디오 정보:`, JSON.stringify(firstReport.attached_video, null, 2));
+          console.log(`🔗 비디오 high URL: ${firstReport.attached_video.high}`);
+          console.log(`🔗 비디오 original URL: ${firstReport.attached_video.original}`);
+        }
+      }
+      
       return { success: true, data };
     } catch (error) {
       console.error('Get reports error:', error);
@@ -283,10 +388,56 @@ class KidsNoteAPI {
     }
   }
 
-  async getAlbums(childId, pageSize = 20, page = 1) {
+  async getAlbums(childId, pageSize = 20, startDate = null, endDate = null) {
     try {
-      const endpoint = `${API_BASE}/children/${childId}/albums/?page_size=${pageSize}&page=${page}&tz=Asia%2FSeoul&child=${childId}`;
+      // origin.js와 동일한 엔드포인트 사용
+      let endpoint = `/api/v1_2/children/${childId}/albums/?page_size=${pageSize}&tz=Asia%2FSeoul&child=${childId}`;
+      
+      // 날짜 필터링 파라미터 추가 (가장 일반적인 패턴만 시도)
+      if (startDate) {
+        endpoint += `&from_date=${startDate}`;
+      }
+      if (endDate) {
+        endpoint += `&to_date=${endDate}`;
+      }
+      
+      console.log(`📸 getAlbums 요청: ${endpoint}`);
+      console.log(`📸 최종 URL: ${BASE_URL}${endpoint}`);
+      console.log(`📸 childId: ${childId}, pageSize: ${pageSize}, startDate: ${startDate}, endDate: ${endDate}`);
       const { data } = await this.makeRequest(endpoint);
+      console.log(`📸 getAlbums 응답 요약:`, {
+        resultsCount: data.results ? data.results.length : 0,
+        hasNext: data.next !== null,
+        nextUrl: data.next ? data.next.substring(0, 100) + '...' : null
+      });
+      
+      // 이미지/비디오 URL 구조 상세 확인
+      if (data.results && data.results.length > 0) {
+        const firstAlbum = data.results[0];
+        console.log(`📸 첫 번째 앨범 샘플:`, JSON.stringify(firstAlbum, null, 2));
+        
+        if (firstAlbum.attached_images && firstAlbum.attached_images.length > 0) {
+          const firstImage = firstAlbum.attached_images[0];
+          console.log(`🖼️ 첫 번째 이미지 정보:`, JSON.stringify(firstImage, null, 2));
+          console.log(`🔗 이미지 original URL: ${firstImage.original}`);
+          console.log(`🔗 이미지 original_file_name: ${firstImage.original_file_name}`);
+          
+          // URL이 상대경로인지 절대경로인지 확인
+          if (firstImage.original) {
+            console.log(`🔍 URL 분석:`);
+            console.log(`  - 시작 문자: ${firstImage.original.substring(0, 20)}...`);
+            console.log(`  - http로 시작: ${firstImage.original.startsWith('http')}`);
+            console.log(`  - /로 시작: ${firstImage.original.startsWith('/')}`);
+          }
+        }
+        
+        if (firstAlbum.attached_video) {
+          console.log(`🎥 비디오 정보:`, JSON.stringify(firstAlbum.attached_video, null, 2));
+          console.log(`🔗 비디오 high URL: ${firstAlbum.attached_video.high}`);
+          console.log(`🔗 비디오 original URL: ${firstAlbum.attached_video.original}`);
+        }
+      }
+      
       return { success: true, data };
     } catch (error) {
       console.error('Get albums error:', error);
@@ -303,12 +454,42 @@ class KidsNoteAPI {
       
       await RNFS.mkdir(dirPath);
 
+      // 세션 확인
+      if (!this.sessionID) {
+        await this.loadSession();
+      }
+
+      // 헤더 설정
+      const headers = {
+        'User-Agent': 'Mozilla/5.0',
+      };
+      
+      // 세션 쿠키 추가 (필요한 경우를 위해)
+      if (this.sessionID) {
+        headers['Cookie'] = `sessionid=${this.sessionID}`;
+        console.log(`🍪 쿠키 헤더 추가: sessionid=${this.sessionID.substring(0, 10)}...`);
+      }
+
+      // URL 처리 로직
+      let downloadUrl = url;
+      console.log(`🔗 원본 URL: ${url}`);
+      
+      // 상대경로인 경우 절대경로로 변환
+      if (url && !url.startsWith('http')) {
+        downloadUrl = url.startsWith('/') ? `${BASE_URL}${url}` : `${BASE_URL}/${url}`;
+        console.log(`🔄 상대경로를 절대경로로 변환: ${downloadUrl}`);
+      }
+      
+      console.log(`🔗 최종 다운로드 URL: ${downloadUrl}`);
+
+      console.log(`📥 다운로드 시작: ${downloadUrl}`);
+      console.log(`🍪 세션 ID: ${this.sessionID ? this.sessionID.substring(0, 10) + '...' : '없음'}`);
+      console.log(`📂 저장 경로: ${downloadDest}`);
+
       const downloadResult = await RNFS.downloadFile({
-        fromUrl: url,
+        fromUrl: downloadUrl,
         toFile: downloadDest,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        },
+        headers,
         progress: (res) => {
           if (onProgress) {
             const progress = (res.bytesWritten / res.contentLength) * 100;
@@ -318,9 +499,11 @@ class KidsNoteAPI {
       }).promise;
 
       if (downloadResult.statusCode === 200) {
+        console.log(`✅ 다운로드 성공: ${destinationPath}`);
         return { success: true, path: downloadDest };
       } else {
-        throw new Error(`다운로드 실패: HTTP ${downloadResult.statusCode}`);
+        console.error(`❌ 다운로드 실패: HTTP ${downloadResult.statusCode} - ${url}`);
+        throw new Error(`HTTP ${downloadResult.statusCode}: 서버 오류가 발생했습니다.`);
       }
     } catch (error) {
       console.error('Download file error:', error);

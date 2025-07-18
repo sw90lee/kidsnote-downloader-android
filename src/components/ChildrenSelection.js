@@ -45,11 +45,14 @@ const ChildrenSelection = ({ onChildrenSelected }) => {
     });
   };
 
+
   const handleNext = () => {
     if (selectedChildren.length === 0) {
       Alert.alert('알림', '다운로드할 자녀를 선택해주세요.');
       return;
     }
+
+    // 권한 체크 없이 바로 진행
     onChildrenSelected(selectedChildren);
   };
 

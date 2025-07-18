@@ -34,6 +34,7 @@ const DownloadOptions = ({ selectedChildren, onStartDownload }) => {
     { id: '2', label: '앨범' },
   ];
 
+
   const handleStartDownload = () => {
     const downloadConfig = {
       selectedChildren,
@@ -50,6 +51,8 @@ const DownloadOptions = ({ selectedChildren, onStartDownload }) => {
       Alert.alert('오류', '시작 날짜가 종료 날짜보다 늦습니다.');
       return;
     }
+
+    // 권한 체크 없이 바로 진행 (매니페스트에 권한이 있음)
 
     Alert.alert(
       '다운로드 확인',
