@@ -218,6 +218,18 @@ class KidsNoteAPI {
     }
   }
 
+  async saveSession(sessionID) {
+    try {
+      this.sessionID = sessionID;
+      await AsyncStorage.setItem('kidsnote_session', sessionID);
+      console.log('✅ 세션 저장 완료:', sessionID);
+      return true;
+    } catch (error) {
+      console.error('Save session error:', error);
+      return false;
+    }
+  }
+
   async loadSession() {
     try {
       this.sessionID = await AsyncStorage.getItem('kidsnote_session');

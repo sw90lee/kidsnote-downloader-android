@@ -104,12 +104,28 @@ function App(): React.JSX.Element {
         return false;
       };
 
-      // Check immediately
-      setTimeout(() => {
-        if (checkLoginSuccess()) {
-          return;
-        }
-      }, 1000);
+      // Check immediately after page load
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          console.log('Page loaded, checking login...');
+          checkLoginSuccess();
+        }, 1000);
+      });
+
+      // Check when DOM is ready
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+          setTimeout(() => {
+            console.log('DOM ready, checking login...');
+            checkLoginSuccess();
+          }, 1000);
+        });
+      } else {
+        setTimeout(() => {
+          console.log('Document already loaded, checking login...');
+          checkLoginSuccess();
+        }, 1000);
+      }
 
       // Monitor for navigation changes
       let lastUrl = location.href;
@@ -122,18 +138,33 @@ function App(): React.JSX.Element {
             if (checkLoginSuccess()) {
               observer.disconnect();
             }
-          }, 1000);
+          }, 1500);
         }
       });
       observer.observe(document, { subtree: true, childList: true });
 
-      // Also check periodically
+      // Also check periodically (more frequently)
       const interval = setInterval(() => {
         if (checkLoginSuccess()) {
           clearInterval(interval);
           observer.disconnect();
         }
-      }, 3000);
+      }, 2000);
+
+      // Check when user interacts with the page
+      document.addEventListener('click', () => {
+        setTimeout(() => {
+          checkLoginSuccess();
+        }, 1000);
+      });
+
+      // Check when form is submitted (login form)
+      document.addEventListener('submit', (e) => {
+        console.log('Form submitted, checking login in 3 seconds...');
+        setTimeout(() => {
+          checkLoginSuccess();
+        }, 3000);
+      });
 
       // Add manual test button for debugging
       setTimeout(() => {
@@ -162,9 +193,28 @@ function App(): React.JSX.Element {
     true;
   `;
 
-  const handleNavigationStateChange = (navState: any) => {
+  const handleNavigationStateChange = async (navState: any) => {
     setCanGoBack(navState.canGoBack);
     setCurrentUrl(navState.url);
+    
+    // URL 변경 시마다 로그인 상태 확인
+    console.log('Navigation state changed:', navState.url);
+    
+    // 로그인 페이지가 아닌 곳으로 이동했을 때 쿠키 확인
+    if (!navState.url.includes('/login') && 
+        !navState.url.includes('/signup') &&
+        navState.url.includes('kidsnote.com')) {
+      
+      console.log('Not on login page, checking for cookies...');
+      
+      // 약간의 지연 후 쿠키 확인 (페이지 로드 완료 대기)
+      setTimeout(async () => {
+        const success = await checkLoginAndExtractCookie();
+        if (success) {
+          console.log('Auto-login detected from navigation!');
+        }
+      }, 2000);
+    }
   };
 
   const handleWebViewMessage = async (event: any) => {
