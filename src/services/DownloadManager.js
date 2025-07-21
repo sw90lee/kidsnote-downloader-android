@@ -96,12 +96,47 @@ class DownloadManager {
 
   async createDownloadDirectory(basePath) {
     try {
-      const downloadPath = `${RNFS.DownloadDirectoryPath}/KidsNote`;
-      const exists = await RNFS.exists(downloadPath);
-      
-      if (!exists) {
-        await RNFS.mkdir(downloadPath);
-        this.log(`다운로드 폴더 생성: ${downloadPath}`);
+      // Android 다양한 버전 대응을 위한 다중 경로 시도
+      const possiblePaths = [
+        // 1순위: 사용자 지정 경로 (있는 경우)
+        basePath,
+        // 2순위: Downloads 폴더 (가장 안전)
+        `${RNFS.DownloadDirectoryPath}/KidsNote`,
+        // 3순위: DocumentDirectory (앱 전용 공간)
+        `${RNFS.DocumentDirectoryPath}/KidsNote`,
+        // 4순위: ExternalCachesDirectory (임시 저장)
+        `${RNFS.ExternalCachesDirectoryPath}/KidsNote`
+      ].filter(path => path); // null/undefined 제거
+
+      let downloadPath = null;
+      let lastError = null;
+
+      for (const path of possiblePaths) {
+        try {
+          this.log(`📁 저장 경로 시도: ${path}`);
+          
+          const exists = await RNFS.exists(path);
+          if (!exists) {
+            await RNFS.mkdir(path);
+          }
+          
+          // 쓰기 권한 테스트
+          const testFile = `${path}/test_write.txt`;
+          await RNFS.writeFile(testFile, 'test', 'utf8');
+          await RNFS.unlink(testFile);
+          
+          downloadPath = path;
+          this.log(`✅ 저장 경로 확정: ${downloadPath}`);
+          break;
+        } catch (error) {
+          lastError = error;
+          this.log(`❌ 경로 실패: ${path} - ${error.message}`);
+          continue;
+        }
+      }
+
+      if (!downloadPath) {
+        throw new Error(`모든 저장 경로에서 쓰기 실패. 마지막 오류: ${lastError?.message}`);
       }
       
       return downloadPath;
@@ -135,7 +170,7 @@ class DownloadManager {
     }
   }
 
-  async processImages(images, childName, className, formattedDate, downloadPath) {
+  async processImages(images, childName, className, formattedDate) {
     const results = [];
     
     for (let i = 0; i < images.length; i++) {
@@ -184,7 +219,7 @@ class DownloadManager {
     return results;
   }
 
-  async processVideo(video, childName, className, formattedDate, downloadPath) {
+  async processVideo(video, childName, className, formattedDate) {
     try {
       const extension = KidsNoteAPI.getFileExtension(video.original_file_name);
       const fileName = className 
@@ -301,7 +336,9 @@ class DownloadManager {
     try {
       this.isDownloading = true;
       
-      await this.createDownloadDirectory();
+      // 저장소 경로 설정 및 생성
+      const downloadPath = await this.createDownloadDirectory();
+      this.log(`📁 저장소 경로 설정 완료: ${downloadPath}`);
       
       this.log(`다운로드 시작 - 자녀 ID: ${childId}`);
       if (startDate || endDate) {

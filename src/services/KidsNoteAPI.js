@@ -540,10 +540,18 @@ class KidsNoteAPI {
   async getDownloadPath() {
     try {
       const savedPath = await AsyncStorage.getItem('download_path');
-      return savedPath || `${RNFS.ExternalStorageDirectoryPath}/Download/KidsNote`;
+      
+      // 기본 경로 우선순위: Downloads > Documents > ExternalCaches
+      const defaultPaths = [
+        `${RNFS.DownloadDirectoryPath}/KidsNote`,
+        `${RNFS.DocumentDirectoryPath}/KidsNote`, 
+        `${RNFS.ExternalCachesDirectoryPath}/KidsNote`
+      ];
+      
+      return savedPath || defaultPaths[0];
     } catch (error) {
       console.error('Failed to get download path:', error);
-      return `${RNFS.ExternalStorageDirectoryPath}/Download/KidsNote`;
+      return `${RNFS.DownloadDirectoryPath}/KidsNote`;
     }
   }
 
