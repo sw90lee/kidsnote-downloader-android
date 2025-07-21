@@ -67,24 +67,6 @@ const DownloadProgress = ({ downloadConfig, onDownloadComplete, onCancel }) => {
     }
   };
 
-  const handleCancel = () => {
-    Alert.alert(
-      '다운로드 중단',
-      '정말로 다운로드를 중단하시겠습니까?',
-      [
-        { text: '아니오', style: 'cancel' },
-        {
-          text: '예',
-          style: 'destructive',
-          onPress: () => {
-            DownloadManager.stopDownload();
-            setIsDownloading(false);
-            onCancel();
-          }
-        }
-      ]
-    );
-  };
 
   const getProgressText = () => {
     if (!progress) return '';
@@ -134,17 +116,6 @@ const DownloadProgress = ({ downloadConfig, onDownloadComplete, onCancel }) => {
         </ScrollView>
       </View>
 
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={[styles.cancelButton, !isDownloading && styles.disabledButton]}
-          onPress={handleCancel}
-          disabled={!isDownloading}
-        >
-          <Text style={[styles.cancelButtonText, !isDownloading && styles.disabledButtonText]}>
-            다운로드 중단
-          </Text>
-        </TouchableOpacity>
-      </View>
 
       {isDownloading && (
         <View style={styles.loadingOverlay}>
@@ -206,7 +177,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 8,
     padding: 15,
-    marginBottom: 20,
   },
   logTitle: {
     fontSize: 18,
@@ -234,26 +204,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#333',
     flex: 1,
-  },
-  buttonContainer: {
-    paddingBottom: 20,
-  },
-  cancelButton: {
-    backgroundColor: '#ff4444',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  disabledButton: {
-    backgroundColor: '#ccc',
-  },
-  cancelButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  disabledButtonText: {
-    color: '#999',
   },
   loadingOverlay: {
     position: 'absolute',

@@ -356,9 +356,7 @@ class DownloadManager {
   async getJsonRecursive(childId, type, isReport, size, index, startDate = null, endDate = null) {
     // origin.js와 동일한 로직: size === 'all' ? 9999 * index : size
     const downloadSize = size === 'all' ? 9999 * index : size;
-    
-    this.log(`📄 재귀 호출 ${index}번째 - page_size: ${downloadSize}`);
-    
+        
     const result = isReport 
       ? await KidsNoteAPI.getReports(childId, downloadSize, startDate, endDate)
       : await KidsNoteAPI.getAlbums(childId, downloadSize, startDate, endDate);
@@ -390,10 +388,6 @@ class DownloadManager {
     }
   }
 
-  stopDownload() {
-    this.isDownloading = false;
-    this.log('다운로드가 중단되었습니다.');
-  }
 }
 
 export default new DownloadManager();
